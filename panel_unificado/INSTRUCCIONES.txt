@@ -1,0 +1,65 @@
+════════════════════════════════════════════════════════
+  Panel SDR eBombo Unificado — Instrucciones
+════════════════════════════════════════════════════════
+
+PASO 1 — Crear el Google Sheets
+────────────────────────────────
+1. Abrí sheets.google.com con tu cuenta personal (gmail.com)
+2. Creá una hoja nueva — llamala "Panel SDR eBombo"
+3. No hace falta agregar nada — el script crea las hojas solo
+
+PASO 2 — Crear el Apps Script
+────────────────────────────────
+1. En el Sheets: Extensiones → Apps Script
+2. Borrá todo el código
+3. Abrí apps_script.gs con Bloc de Notas
+4. Copiá todo y pegalo
+5. Guardá con Ctrl+S
+
+PASO 3 — Publicar
+────────────────────────────────
+1. Implementar → Nueva implementación
+2. Tipo: Aplicación web
+3. Ejecutar como: Yo
+4. Acceso: Cualquier persona
+5. Implementar → aceptá permisos
+6. Copiá la URL que termina en /exec
+
+PASO 4 — Conectar con la web
+────────────────────────────────
+1. Abrí index.html con Bloc de Notas
+2. Buscá esta línea (cerca del final):
+   const SCRIPT_URL = 'PEGAR_URL_AQUI';
+3. Reemplazá PEGAR_URL_AQUI con tu URL real
+
+PASO 5 — Publicar en Netlify
+────────────────────────────────
+1. netlify.com → Add new site → Deploy manually
+2. Arrastrá la carpeta panel_unificado completa
+3. Copiá el link y compartilo con el equipo
+
+═══════════════════════════════════════
+  FUNCIONALIDADES DEL PANEL
+═══════════════════════════════════════
+
+📊 Dashboard    — Métricas globales con filtros por SDR/País/Período
+                  Gráfico de actividad diaria + tablas por SDR y País
+
+👤 Mi Panel     — Dashboard individual editable por SDR
+                  Clic en cualquier número para editarlo
+                  Outbound: llamadas, emails, LinkedIn, pipeline por país
+                  Inbound: leads, contactados, reuniones, pipeline
+                  Comparativa: todos los SDRs del mismo período
+
+📝 Registrar    — Formulario diario de actividad
+                  Se guarda en Google Sheets compartido
+
+📋 Historial    — Todos los registros con filtros + exportar CSV/HTML
+
+🤝 Reuniones    — 148 reuniones históricas del PDF
+                  Filtros por SDR/País/Mes/Estado
+                  Pipeline total: $1,124,224
+
+🏆 Ranking      — Top SDR del mes por reuniones
+
+════════════════════════════════════════════════════════
