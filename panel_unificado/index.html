@@ -1320,18 +1320,49 @@ function renderReus() {
     return `<span class="pill pn">Sin prop.</span>`;
   };
 
-  document.getElementById('re-tbl').innerHTML = recs.map(r=>`
-    <tr>
+  const selStyle = `background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;cursor:pointer;`;
+
+  document.getElementById('re-tbl').innerHTML = recs.map(r=>{
+    const key = getReuKey(r);
+    const ks = key.replace(/'/g,"\\'");
+    return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
       <td><strong>${r.sdr}</strong></td>
-      <td>${r.empresa}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.empresa}">${r.empresa}</td>
       <td>${paisLabels[r.pais]||r.pais}</td>
       <td><span class="pill pb">${r.canal}</span></td>
-      <td>${r._id ? `<select onchange="editReu('${r._id}','realizada',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="SI" ${r.realizada==='SI'?'selected':''}>Sí</option><option value="NO" ${r.realizada!=='SI'?'selected':''}>No</option></select>` : (r.realizada==='SI'?'<span class="pill pg">Sí</span>':'<span class="pill pr">No</span>')}</td>
-      <td>${r._id ? `<select onchange="editReu('${r._id}','cotizacion',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="SI" ${r.cotizacion==='SI'?'selected':''}>Sí</option><option value="NO" ${r.cotizacion!=='SI'?'selected':''}>No</option></select>` : (r.cotizacion==='SI'?'<span class="pill pg">Sí</span>':'<span class="pill pn">No</span>')}</td>
-      <td>${r._id ? `<select onchange="editReu('${r._id}','estado',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="" ${!r.estado?'selected':''}>En proceso</option><option value="HOT" ${r.estado==='HOT'?'selected':''}>HOT 🔥</option><option value="WON" ${r.estado==='WON'?'selected':''}>WON 🏆</option><option value="LOST" ${r.estado==='LOST'?'selected':''}>LOST</option></select>` : estadoPill(r.estado,r.cotizacion,r.monto)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:${r.monto>0?'#34D399':'var(--muted)'};">${r._id ? `<span contenteditable="true" onblur="editReu('${r._id}','monto',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">$${r.monto||0}</span>` : (r.monto>0?'$'+fmt(r.monto):'—')}</td>
-    </tr>`).join('')||'<tr class="empty-row"><td colspan="9">Sin reuniones para este filtro</td></tr>';
+      <td>
+        <select onchange="editReu('${ks}','realizada',this.value)" style="${selStyle}">
+          <option value="SI" ${r.realizada==='SI'?'selected':''}>Sí</option>
+          <option value="NO" ${r.realizada==='NO'?'selected':''}>No</option>
+          <option value="TODAVIA" ${r.realizada==='TODAVIA'?'selected':''}>Todavía</option>
+        </select>
+      </td>
+      <td>
+        <select onchange="editReu('${ks}','cotizacion',this.value)" style="${selStyle}">
+          <option value="SI" ${r.cotizacion==='SI'?'selected':''}>Sí</option>
+          <option value="NO" ${r.cotizacion==='NO'?'selected':''}>No</option>
+        </select>
+      </td>
+      <td>
+        <select onchange="editReu('${ks}','estado',this.value)" style="${selStyle}">
+          <option value=""     ${!r.estado?'selected':''}>En proceso</option>
+          <option value="HOT"  ${r.estado==='HOT'?'selected':''}>HOT 🔥</option>
+          <option value="WON"  ${r.estado==='WON'?'selected':''}>WON 🏆</option>
+          <option value="LOST" ${r.estado==='LOST'?'selected':''}>LOST</option>
+          <option value="FREE TRIAL" ${r.estado==='FREE TRIAL'?'selected':''}>Free Trial</option>
+        </select>
+      </td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;">
+        <span contenteditable="true"
+          onfocus="let rr=document.createRange();rr.selectNodeContents(this);let ss=window.getSelection();ss.removeAllRanges();ss.addRange(rr);"
+          onblur="editReu('${ks}','monto',this.textContent)"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+          style="cursor:text;display:inline-block;min-width:40px;padding:1px 4px;border-bottom:1px dashed var(--border2);color:${r.monto>0?'#34D399':'var(--muted)'};"
+        >${r.monto>0?fmt(r.monto):''}</span>
+      </td>
+    </tr>`;
+  }).join('')||'<tr class="empty-row"><td colspan="9">Sin reuniones para este filtro</td></tr>';
 }
 
 // ─── RANKING ─────────────────────────────────────────────────
@@ -1605,11 +1636,24 @@ function go(t) {
 
 
 
-// ─── REUNIONES EXTRAS ────────────────────────────────────────
+// ─── REUNIONES EXTRAS + EDITS ────────────────────────────────
 let reusExtras = [];
 try { reusExtras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]'); } catch(e) {}
 
-function getAllReus() { return REUNIONES_DATA.concat(reusExtras); }
+let reuEdits = {};
+try { reuEdits = JSON.parse(localStorage.getItem('ebombo_reus_edits')||'{}'); } catch(e) {}
+
+function getReuKey(r) {
+  return r._id || [r.mes, r.semana, r.sdr, r.empresa].join('__');
+}
+
+function getAllReus() {
+  const base = REUNIONES_DATA.map(r => {
+    const key = getReuKey(r);
+    return reuEdits[key] ? {...r, ...reuEdits[key]} : r;
+  });
+  return base.concat(reusExtras);
+}
 
 function showAddReu() {
   const f = document.getElementById('reu-form');
@@ -1641,12 +1685,19 @@ function addReu() {
   renderReus();
 }
 
-function editReu(id, field, val) {
-  const r = reusExtras.find(x=>x._id===id);
-  if (!r) return;
-  r[field] = field==='monto' ? parseInt(val)||0 : val;
-  localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-  apiPost({action:'addReu', reu:r});
+function editReu(key, field, val) {
+  const v = field === 'monto' ? (parseInt((val||'').replace(/[^0-9]/g,''))||0) : val;
+  const extra = reusExtras.find(x => x._id === key);
+  if (extra) {
+    extra[field] = v;
+    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+    apiPost({action:'addReu', reu:extra});
+  } else {
+    if (!reuEdits[key]) reuEdits[key] = {};
+    reuEdits[key][field] = v;
+    localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
+  }
+  renderReus();
 }
 
 // ─── CAMPAÑAS ────────────────────────────────────────────────
