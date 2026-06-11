@@ -272,12 +272,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="fg"><label>Contactados</label>
         <div class="numrow"><button onclick="dec('f-cont')">−</button><input type="number" id="f-cont" value="0" min="0"><button onclick="inc('f-cont')">+</button></div>
       </div>
-      <div class="fg"><label>Respuestas</label>
-        <div class="numrow"><button onclick="dec('f-resp')">−</button><input type="number" id="f-resp" value="0" min="0"><button onclick="inc('f-resp')">+</button></div>
-      </div>
-      <div class="fg"><label>Positivas</label>
-        <div class="numrow"><button onclick="dec('f-pos')">−</button><input type="number" id="f-pos" value="0" min="0"><button onclick="inc('f-pos')">+</button></div>
-      </div>
       <div class="fg"><label>Reuniones</label>
         <div class="numrow"><button onclick="dec('f-reus')">−</button><input type="number" id="f-reus" value="0" min="0"><button onclick="inc('f-reus')">+</button></div>
       </div>
@@ -296,7 +290,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
   </div>
-  <div class="twrap"><table><thead><tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Respuestas</th><th>Positivas</th><th>Reuniones</th><th>Tasa</th><th>Notas</th></tr></thead><tbody id="h-tbl"></tbody></table></div>
+  <div class="twrap"><table><thead><tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Reuniones</th><th>Notas</th></tr></thead><tbody id="h-tbl"></tbody></table></div>
 </section>
 
 <!-- ═══════ REUNIONES ═══════ -->
@@ -376,9 +370,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <div class="numrow"><button onclick="dec('nc-cont')">−</button><input type="number" id="nc-cont" value="0" min="0"><button onclick="inc('nc-cont')">+</button></div>
       </div>
       <div class="fg full"><label>Nombre de campaña</label><input type="text" id="nc-nombre" placeholder="Ej: MEX_001_Marketing - Leandro"></div>
-      <div class="fg"><label>Respuestas</label>
-        <div class="numrow"><button onclick="dec('nc-resp')">−</button><input type="number" id="nc-resp" value="0" min="0"><button onclick="inc('nc-resp')">+</button></div>
-      </div>
       <div class="fg"><label>Reuniones generadas</label>
         <div class="numrow"><button onclick="dec('nc-reus')">−</button><input type="number" id="nc-reus" value="0" min="0"><button onclick="inc('nc-reus')">+</button></div>
       </div>
@@ -394,7 +385,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <table>
       <thead><tr>
         <th>SDR</th><th>País</th><th>Fecha envío</th><th>Nombre campaña</th>
-        <th>Contactos</th><th>Respuestas</th><th>Reuniones</th><th>Tasa</th><th>Acciones</th>
+        <th>Contactos</th><th>Reuniones</th><th>Acciones</th>
       </tr></thead>
       <tbody id="c-tbl"></tbody>
     </table>
@@ -1020,8 +1011,6 @@ async function guardar() {
     pais:  document.getElementById('f-pais').value,
     canal: document.getElementById('f-canal').value,
     contactados: parseInt(document.getElementById('f-cont').value)||0,
-    respuestas:  parseInt(document.getElementById('f-resp').value)||0,
-    positivas:   parseInt(document.getElementById('f-pos').value)||0,
     reuniones:   parseInt(document.getElementById('f-reus').value)||0,
     notas: document.getElementById('f-notas').value,
   };
@@ -1032,7 +1021,7 @@ async function guardar() {
   al.textContent='✅ Registro guardado. Visible para todo el equipo.';
   al.className='alert ok show';
   setTimeout(()=>al.classList.remove('show'),5000);
-  ['f-cont','f-resp','f-pos','f-reus'].forEach(id=>document.getElementById(id).value=0);
+  ['f-cont','f-reus'].forEach(id=>document.getElementById(id).value=0);
   document.getElementById('f-notas').value='';
   btn.disabled=false; btn.textContent='Guardar registro';
   renderDash(); renderHist(); renderRanking();
@@ -1048,15 +1037,13 @@ function renderHist() {
     return;
   }
   document.getElementById('h-tbl').innerHTML = recs.map(r => {
-    const rate = r.contactados ? Math.round(r.respuestas/r.contactados*100) : 0;
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${r.fecha||'—'}</td>
       <td><strong>${r.sdr||'—'}</strong></td>
       <td>${flag(r.pais)} ${paisLabel(r.pais)}</td>
       <td><span class="pill pb">${r.canal||'—'}</span></td>
-      <td>${n(r.contactados)}</td><td>${n(r.respuestas)}</td>
-      <td>${n(r.positivas)}</td><td><strong>${n(r.reuniones)}</strong></td>
-      <td><span class="pill ${pillClass(rate)}">${rate}%</span></td>
+      <td>${n(r.contactados)}</td>
+      <td><strong>${n(r.reuniones)}</strong></td>
       <td style="color:var(--muted);font-size:11px;">${r.notas||'—'}</td>
     </tr>`;
   }).join('');
@@ -1162,8 +1149,8 @@ function exportCSV() {
   const sdrF  = document.getElementById('h-sdr').value;
   const paisF = document.getElementById('h-pais').value;
   const recs  = filtered(sdrF, paisF, 'all').sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const header='Fecha,SDR,País,Canal,Contactados,Respuestas,Positivas,Reuniones,Notas';
-  const rows = recs.map(r=>`${r.fecha},${r.sdr},${r.pais},${r.canal},${n(r.contactados)},${n(r.respuestas)},${n(r.positivas)},${n(r.reuniones)},"${(r.notas||'').replace(/"/g,'""')}"`);
+  const header='Fecha,SDR,País,Canal,Contactados,Reuniones,Notas';
+  const rows = recs.map(r=>`${r.fecha},${r.sdr},${r.pais},${r.canal},${n(r.contactados)},${n(r.reuniones)},"${(r.notas||'').replace(/"/g,'""')}"`);
   const a = Object.assign(document.createElement('a'),{href:'data:text/csv;charset=utf-8,'+encodeURIComponent([header,...rows].join('\n')),download:`ebombo_sdr_${new Date().toISOString().split('T')[0]}.csv`});
   a.click();
 }
@@ -1178,8 +1165,7 @@ function exportReporte(period) {
   }).map(normalizeRecord).sort((a,b)=>a.fecha.localeCompare(b.fecha));
 
   const label = period==='week'?'Semana':'Mes';
-  const total = recs.reduce((a,r)=>({contactados:a.contactados+n(r.contactados),respuestas:a.respuestas+n(r.respuestas),positivas:a.positivas+n(r.positivas),reuniones:a.reuniones+n(r.reuniones)}),{contactados:0,respuestas:0,positivas:0,reuniones:0});
-  const tR = total.contactados?Math.round(total.respuestas/total.contactados*100):0;
+  const total = recs.reduce((a,r)=>({contactados:a.contactados+n(r.contactados),reuniones:a.reuniones+n(r.reuniones)}),{contactados:0,reuniones:0});
 
   const rStats = {total:getAllReus().length, conProp:getAllReus().filter(r=>r.cotizacion==='SI').length, won:getAllReus().filter(r=>r.estado==='WON').length, lost:getAllReus().filter(r=>r.estado==='LOST').length, pipeline:getAllReus().reduce((a,r)=>a+(r.monto||0),0)};
 
@@ -1198,8 +1184,6 @@ function exportReporte(period) {
   <h2>Resumen global</h2>
   <table><tr><th>Métrica</th><th>Valor</th></tr>
   <tr><td>Contactados</td><td class="g">${total.contactados.toLocaleString()}</td></tr>
-  <tr><td>Respuestas</td><td>${total.respuestas} (${tR}%)</td></tr>
-  <tr><td>Positivas</td><td class="g">${total.positivas}</td></tr>
   <tr><td>Reuniones</td><td class="g">${total.reuniones}</td></tr></table>
   <h2>Reuniones históricas</h2>
   <table><tr><th>Total</th><th>Con propuesta</th><th>WON</th><th>LOST</th><th>Pipeline USD</th></tr>
@@ -1331,13 +1315,10 @@ function renderCamps() {
 
   // Cards resumen
   const totalCont = recs.reduce((a,c)=>a+(c.contactos||0),0);
-  const totalResp = recs.reduce((a,c)=>a+(c.respuestas||0),0);
   const totalReus = recs.reduce((a,c)=>a+(c.reuniones||0),0);
-  const tasa = totalCont?Math.round(totalResp/totalCont*100):0;
   document.getElementById('c-cards').innerHTML = `
     <div class="card b"><div class="card-lbl">Campañas</div><div class="card-val">${recs.length}</div><div class="card-sub">total</div></div>
     <div class="card b"><div class="card-lbl">Contactos totales</div><div class="card-val">${totalCont.toLocaleString()}</div><div class="card-sub">enviados</div></div>
-    <div class="card g"><div class="card-lbl">Respuestas</div><div class="card-val">${totalResp}</div><div class="card-sub">tasa ${tasa}%</div></div>
     <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${totalReus}</div><div class="card-sub">generadas</div></div>`;
 
   // Tabla
@@ -1348,7 +1329,6 @@ function renderCamps() {
 
   document.getElementById('c-tbl').innerHTML = sorted.map(c=>{
     const sdrInfo = SDRS.find(x=>x.label===c.sdr)||{color:'#6B7280',avatar:(c.sdr||'??').slice(0,2).toUpperCase()};
-    const tasa = c.contactos?Math.round((c.respuestas||0)/c.contactos*100):0;
     const isCustom = c.id.startsWith('custom_');
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:6px;">
@@ -1358,9 +1338,7 @@ function renderCamps() {
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.fecha||'—'}</td>
       <td style="max-width:220px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.nombre}">${c.nombre}</td>
       <td><span contenteditable="true" onblur="editCampField('${c.id}','contactos',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.contactos||0}</span></td>
-      <td><span contenteditable="true" onblur="editCampField('${c.id}','respuestas',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.respuestas||0}</span></td>
       <td><span contenteditable="true" onblur="editCampField('${c.id}','reuniones',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.reuniones||0}</span></td>
-      <td><span class="pill ${tasa>=5?'pg':tasa>=2?'pa':'pr'}">${tasa}%</span></td>
       <td>${isCustom?`<button class="btn-sm" onclick="deleteCamp('${c.id}')" style="color:var(--red);border-color:var(--red);font-size:10px;padding:2px 8px;">✕</button>`:'—'}</td>
     </tr>`;
   }).join('')||'<tr class="empty-row"><td colspan="9">Sin campañas para este filtro</td></tr>';
