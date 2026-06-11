@@ -1382,48 +1382,212 @@ function exportCSV() {
 }
 
 function exportReporte(period) {
-  const now   = new Date();
-  const recs  = records.filter(r=>{
-    if(!r.fecha) return false;
-    if(period==='week'){return (now-new Date(r.fecha))/86400000<=7;}
-    const d=new Date(r.fecha);
-    return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-  }).map(normalizeRecord).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth() + 1;
+  const curDay   = now.getDate();
+  const curSemana = Math.ceil(curDay / 7);
 
-  const label = period==='week'?'Semana':'Mes';
-  const total = recs.reduce((a,r)=>({contactados:a.contactados+n(r.contactados),respuestas:a.respuestas+n(r.respuestas),positivas:a.positivas+n(r.positivas),reuniones:a.reuniones+n(r.reuniones)}),{contactados:0,respuestas:0,positivas:0,reuniones:0});
-  const tR = total.contactados?Math.round(total.respuestas/total.contactados*100):0;
+  const dow = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(curDay - (dow === 0 ? 6 : dow - 1));
+  monday.setHours(0,0,0,0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23,59,59,999);
+  const fmtD = d => d.toISOString().split('T')[0];
+  const weekStart = fmtD(monday);
+  const weekEnd   = fmtD(sunday);
 
-  const rStats = {total:getAllReus().length, conProp:getAllReus().filter(r=>r.cotizacion==='SI').length, won:getAllReus().filter(r=>r.estado==='WON').length, lost:getAllReus().filter(r=>r.estado==='LOST').length, pipeline:getAllReus().reduce((a,r)=>a+(r.monto||0),0)};
+  const actRecs = records.filter(r => {
+    if (!r.fecha) return false;
+    if (period === 'week') return r.fecha >= weekStart && r.fecha <= weekEnd;
+    return r.fecha.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`);
+  }).sort((a,b) => a.fecha.localeCompare(b.fecha));
 
-  let html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte ${label} SDR — eBombo</title>
-  <style>body{font-family:Arial,sans-serif;font-size:13px;color:#1A1916;padding:2rem;max-width:900px;margin:0 auto;}
-  h1{font-size:22px;font-weight:700;margin-bottom:4px;}
-  .sub{color:#7A7870;font-size:13px;margin-bottom:2rem;}
-  h2{font-size:15px;font-weight:600;margin:1.5rem 0 .75rem;border-bottom:1px solid #E2E0D8;padding-bottom:6px;}
-  table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px;}
-  th{background:#F0EFE9;padding:7px 10px;text-align:left;font-weight:600;border:1px solid #E2E0D8;}
-  td{padding:7px 10px;border:1px solid #E2E0D8;}tr:nth-child(even) td{background:#F7F6F2;}
-  .g{color:#1A6B4A;font-weight:600;}.r{color:#8B2020;}.footer{margin-top:2rem;font-size:11px;color:#7A7870;border-top:1px solid #E2E0D8;padding-top:1rem;}
-  @media print{body{padding:1rem;}}</style></head><body>
-  <h1>Reporte ${label} — eBombo SDR</h1>
-  <div class="sub">Generado el ${now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-  <h2>Resumen global</h2>
-  <table><tr><th>Métrica</th><th>Valor</th></tr>
-  <tr><td>Contactados</td><td class="g">${total.contactados.toLocaleString()}</td></tr>
-  <tr><td>Respuestas</td><td>${total.respuestas} (${tR}%)</td></tr>
-  <tr><td>Positivas</td><td class="g">${total.positivas}</td></tr>
-  <tr><td>Reuniones</td><td class="g">${total.reuniones}</td></tr></table>
-  <h2>Reuniones históricas</h2>
-  <table><tr><th>Total</th><th>Con propuesta</th><th>WON</th><th>LOST</th><th>Pipeline USD</th></tr>
-  <tr><td>${rStats.total}</td><td class="g">${rStats.conProp}</td><td class="g">${rStats.won}</td><td class="r">${rStats.lost}</td><td class="g">$${rStats.pipeline.toLocaleString()}</td></tr></table>
-  <h2>Top oportunidades ($5K+)</h2>
-  <table><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Estado</th><th>Monto</th></tr>
-  ${getAllReus().filter(r=>r.monto>5000).sort((a,b)=>b.monto-a.monto).slice(0,15).map(r=>`<tr><td>${r.sdr}</td><td>${r.empresa}</td><td>${r.pais}</td><td>${r.estado||'—'}</td><td class="g">$${r.monto.toLocaleString()}</td></tr>`).join('')}
-  </table>
-  <div class="footer">Reporte generado por Panel SDR eBombo · ${now.toISOString()}</div></body></html>`;
+  const allReus = getAllReus();
+  const periodReus = allReus.filter(r =>
+    period === 'week' ? (r.mes === curMonth && r.semana === curSemana) : r.mes === curMonth
+  );
 
-  const a = Object.assign(document.createElement('a'),{href:'data:text/html;charset=utf-8,'+encodeURIComponent(html),download:`reporte_${period}_${now.toISOString().split('T')[0]}.html`});
+  const dailyAll = loadDailyData(curYear, curMonth);
+  const weekDays = [];
+  if (period === 'week') {
+    for (let d = new Date(monday); d <= sunday; d.setDate(d.getDate()+1)) {
+      if (d.getMonth()+1 === curMonth) weekDays.push(d.getDate());
+    }
+  }
+  const campPeriod = campsData.map(c => {
+    const cd = dailyAll[c.id] || {};
+    const total = period === 'week'
+      ? weekDays.reduce((s,d) => s+(cd[d]||0), 0)
+      : Object.values(cd).reduce((s,v) => s+(v||0), 0);
+    return {...c, total};
+  }).filter(c => c.total > 0).sort((a,b) => b.total - a.total);
+
+  const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
+  const sdrStats = sdrNames.map(sdr => {
+    const logs = actRecs.filter(r => r.sdr === sdr);
+    const reus = periodReus.filter(r => r.sdr === sdr);
+    const campC = campPeriod.filter(c => c.sdr === sdr).reduce((s,c)=>s+c.total,0);
+    return {
+      sdr,
+      contactadosLog: logs.reduce((s,r)=>s+n(r.contactados),0),
+      campContactos:  campC,
+      agendadas:      reus.length,
+      realizadas:     reus.filter(r=>r.realizada==='SI').length,
+      todavia:        reus.filter(r=>r.realizada==='TODAVIA').length,
+      conCot:         reus.filter(r=>r.cotizacion==='SI').length,
+      won:            reus.filter(r=>r.estado==='WON').length,
+      lost:           reus.filter(r=>r.estado==='LOST').length,
+      hot:            reus.filter(r=>r.estado==='HOT').length,
+      pipeline:       reus.reduce((s,r)=>s+(r.monto||0),0),
+    };
+  });
+
+  const totContactados = actRecs.reduce((s,r)=>s+n(r.contactados),0);
+  const totCampCont    = campPeriod.reduce((s,c)=>s+c.total,0);
+  const totAgendadas   = periodReus.length;
+  const totRealizadas  = periodReus.filter(r=>r.realizada==='SI').length;
+  const totTodavia     = periodReus.filter(r=>r.realizada==='TODAVIA').length;
+  const totConCot      = periodReus.filter(r=>r.cotizacion==='SI').length;
+  const totWON         = periodReus.filter(r=>r.estado==='WON').length;
+  const totLOST        = periodReus.filter(r=>r.estado==='LOST').length;
+  const totHOT         = periodReus.filter(r=>r.estado==='HOT').length;
+  const totPipeline    = periodReus.reduce((s,r)=>s+(r.monto||0),0);
+
+  const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const label = period === 'week'
+    ? `Semana del ${monday.toLocaleDateString('es-ES',{day:'numeric',month:'long'})} al ${sunday.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`
+    : `${MONTHS[curMonth-1]} ${curYear}`;
+
+  const pillCss = e => e==='WON'?'won':e==='LOST'?'lost':e==='HOT'?'hot':e==='FREE TRIAL'?'ft':'';
+  const pill = e => e?`<span class="pill p${pillCss(e)}">${e}</span>`:'—';
+  const money = v => v?'$'+Number(v).toLocaleString():'—';
+  const dash  = v => v||'—';
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Reporte ${period==='week'?'Semanal':'Mensual'} — eBombo SDR</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1A1916;padding:2.5rem;max-width:1100px;margin:0 auto;background:#fff;}
+h1{font-size:26px;font-weight:800;color:#1A1916;margin-bottom:4px;}
+.sub{color:#7A7870;font-size:13px;margin-bottom:2.5rem;line-height:1.6;}
+h2{font-size:14px;font-weight:700;margin:2.5rem 0 .8rem;padding-bottom:6px;border-bottom:2px solid #1A6B4A;color:#1A6B4A;text-transform:uppercase;letter-spacing:.5px;}
+.cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:2rem;}
+.card{background:#F7F6F2;border:1px solid #E2E0D8;border-radius:8px;padding:14px 18px;min-width:120px;}
+.card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#7A7870;margin-bottom:5px;}
+.card-val{font-size:26px;font-weight:800;color:#1A6B4A;}
+.card-val.b{color:#1E3A5F;} .card-val.r{color:#8B2020;} .card-val.o{color:#92400E;}
+table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px;}
+th{background:#F0EFE9;padding:8px 10px;text-align:left;font-weight:700;border:1px solid #E2E0D8;white-space:nowrap;font-size:11px;}
+td{padding:7px 10px;border:1px solid #E2E0D8;vertical-align:middle;}
+tr:nth-child(even) td{background:#FAFAF8;}
+.g{color:#1A6B4A;font-weight:700;} .r{color:#8B2020;font-weight:700;} .b{color:#1E3A5F;font-weight:700;} .o{color:#92400E;font-weight:700;}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.pwon{background:#D1FAE5;color:#065F46;} .plost{background:#FEE2E2;color:#991B1B;}
+.phot{background:#FEF3C7;color:#92400E;} .pft{background:#EDE9FE;color:#5B21B6;}
+.nodata{color:#9A9890;font-style:italic;padding:12px 0;font-size:12px;}
+.sdr-row td:first-child{font-weight:700;font-size:13px;}
+.footer{margin-top:3rem;font-size:11px;color:#7A7870;border-top:1px solid #E2E0D8;padding-top:1rem;}
+@media print{body{padding:1rem;} h2{margin-top:1.5rem;}}
+</style></head><body>
+<h1>Reporte ${period==='week'?'Semanal':'Mensual'} — eBombo SDR</h1>
+<div class="sub">${label}<br>Generado el ${now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+
+<h2>Resumen ejecutivo</h2>
+<div class="cards">
+  <div class="card"><div class="card-lbl">Contactados (logs)</div><div class="card-val b">${totContactados.toLocaleString()}</div></div>
+  <div class="card"><div class="card-lbl">Contactos campaña</div><div class="card-val b">${totCampCont.toLocaleString()}</div></div>
+  <div class="card"><div class="card-lbl">Reuniones agendadas</div><div class="card-val">${totAgendadas}</div></div>
+  <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val">${totRealizadas}</div></div>
+  <div class="card"><div class="card-lbl">Todavía</div><div class="card-val o">${totTodavia}</div></div>
+  <div class="card"><div class="card-lbl">Con cotización</div><div class="card-val">${totConCot}</div></div>
+  <div class="card"><div class="card-lbl">WON</div><div class="card-val">${totWON}</div></div>
+  <div class="card"><div class="card-lbl">LOST</div><div class="card-val r">${totLOST}</div></div>
+  <div class="card"><div class="card-lbl">HOT</div><div class="card-val o">${totHOT}</div></div>
+  <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val">$${totPipeline.toLocaleString()}</div></div>
+</div>
+
+<h2>Por SDR</h2>
+<table>
+  <tr><th>SDR</th><th>Cont. logs</th><th>Cont. campaña</th><th>Agendadas</th><th>Realizadas</th><th>Todavía</th><th>Con cot.</th><th>WON</th><th>LOST</th><th>HOT</th><th>Pipeline USD</th></tr>
+  ${sdrStats.map(s=>`<tr class="sdr-row">
+    <td>${s.sdr}</td>
+    <td class="b">${s.contactadosLog||'—'}</td>
+    <td class="b">${s.campContactos||'—'}</td>
+    <td>${s.agendadas||'—'}</td>
+    <td class="g">${s.realizadas||'—'}</td>
+    <td class="o">${s.todavia||'—'}</td>
+    <td>${s.conCot||'—'}</td>
+    <td class="g">${s.won||'—'}</td>
+    <td class="r">${s.lost||'—'}</td>
+    <td class="o">${s.hot||'—'}</td>
+    <td class="g">${s.pipeline?'$'+s.pipeline.toLocaleString():'—'}</td>
+  </tr>`).join('')}
+</table>
+
+<h2>Reuniones del período (${periodReus.length})</h2>
+${periodReus.length ? `<table>
+  <tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr>
+  ${periodReus.sort((a,b)=>a.sdr.localeCompare(b.sdr)).map(r=>`<tr>
+    <td>${r.sdr}</td><td><strong>${r.empresa}</strong></td>
+    <td>${r.pais}</td><td>${r.canal}</td>
+    <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'o':'r'}">${r.realizada}</td>
+    <td class="${r.cotizacion==='SI'?'g':''}">${r.cotizacion}</td>
+    <td>${pill(r.estado)}</td>
+    <td class="g">${money(r.monto)}</td>
+  </tr>`).join('')}
+</table>` : '<p class="nodata">Sin reuniones registradas para este período.</p>'}
+
+<h2>Pipeline activo — con propuesta o HOT/WON</h2>
+${(()=>{
+  const pip = periodReus.filter(r=>r.monto>0||r.estado==='HOT'||r.estado==='WON'||r.cotizacion==='SI')
+    .sort((a,b)=>(b.monto||0)-(a.monto||0));
+  return pip.length ? `<table>
+    <tr><th>SDR</th><th>Empresa</th><th>País</th><th>Estado</th><th>Monto USD</th></tr>
+    ${pip.map(r=>`<tr>
+      <td>${r.sdr}</td><td><strong>${r.empresa}</strong></td><td>${r.pais}</td>
+      <td>${pill(r.estado)||'En proceso'}</td>
+      <td class="g">${money(r.monto)}</td>
+    </tr>`).join('')}
+  </table>` : '<p class="nodata">Sin oportunidades activas con propuesta en el período.</p>';
+})()}
+
+<h2>Actividad diaria registrada (${actRecs.length} registros)</h2>
+${actRecs.length ? `<table>
+  <tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Reuniones</th><th>Notas</th></tr>
+  ${actRecs.map(r=>`<tr>
+    <td style="white-space:nowrap;font-family:monospace;">${r.fecha}</td>
+    <td>${r.sdr}</td><td>${dash(r.pais)}</td><td>${dash(r.canal)}</td>
+    <td class="b">${dash(r.contactados)}</td>
+    <td class="g">${dash(r.reuniones)}</td>
+    <td style="font-size:11px;color:#555;max-width:200px;">${dash(r.notas)}</td>
+  </tr>`).join('')}
+</table>` : '<p class="nodata">Sin registros de actividad diaria para este período (datos desde Google Sheets).</p>'}
+
+<h2>Contactos cargados por campaña (${campPeriod.length} campañas activas)</h2>
+${campPeriod.length ? `<table>
+  <tr><th>Campaña</th><th>SDR</th><th>País</th><th>Contactos</th></tr>
+  ${campPeriod.map(c=>`<tr>
+    <td style="font-size:12px;">${c.nombre}</td>
+    <td>${c.sdr}</td><td>${c.pais}</td>
+    <td class="b"><strong>${c.total.toLocaleString()}</strong></td>
+  </tr>`).join('')}
+  <tr style="background:#F0EFE9;">
+    <td colspan="3"><strong>TOTAL</strong></td>
+    <td class="b"><strong>${totCampCont.toLocaleString()}</strong></td>
+  </tr>
+</table>` : '<p class="nodata">Sin contactos de campaña cargados para este período.</p>'}
+
+<div class="footer">Panel SDR eBombo &nbsp;·&nbsp; Reporte generado el ${now.toISOString()} &nbsp;·&nbsp; ${period==='week'?'Reporte Semanal':'Reporte Mensual'}</div>
+</body></html>`;
+
+  const fname = `reporte_${period==='week'?'semana':'mes'}_${fmtD(now)}.html`;
+  const a = Object.assign(document.createElement('a'),{
+    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
+    download: fname
+  });
   a.click();
 }
 
