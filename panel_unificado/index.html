@@ -1532,7 +1532,7 @@ function addCamp() {
 function saveDayField(campId, day, value, y, m) {
   const data = loadDailyData(y, m);
   if (!data[campId]) data[campId] = {};
-  const v = parseInt(value) || 0;
+  const v = parseInt((value||'').replace(/[^0-9]/g,'')) || 0;
   if (v === 0) delete data[campId][day]; else data[campId][day] = v;
   saveDailyData(y, m, data);
   const totalCell = document.getElementById('camp-total-'+campId);
@@ -1610,9 +1610,10 @@ function renderCamps() {
       cells += `<td style="text-align:center;padding:2px 1px;${isT?'background:var(--blue)11;':''}">
         <span contenteditable="true"
           onblur="saveDayField('${c.id}',${d},this.textContent,${y},${m})"
+          onfocus="let r=document.createRange();r.selectNodeContents(this);let s=window.getSelection();s.removeAllRanges();s.addRange(r);"
           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
-          style="display:inline-block;min-width:28px;text-align:center;cursor:text;border-radius:3px;padding:1px 2px;${v?'font-weight:600;color:var(--blue);':'color:var(--border2);'}"
-        >${v||'·'}</span>
+          style="display:inline-block;min-width:28px;height:20px;line-height:20px;text-align:center;cursor:text;border-radius:3px;padding:0 2px;${v?'font-weight:600;color:var(--blue);':'color:var(--border2);'}"
+        >${v||''}</span>
       </td>`;
     }
     return `<tr>
