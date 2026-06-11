@@ -220,6 +220,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="cards" id="d-cards"></div>
   <div class="stitle" style="margin-top:.5rem;">📈 Actividad por día</div>
   <div class="chart-wrap"><div class="chart-inner"><canvas id="act-chart" role="img" aria-label="Actividad diaria"></canvas></div></div>
+  <div class="stitle">🎯 Origen de reuniones</div>
+  <div class="chart-wrap">
+    <div style="display:flex;gap:2rem;align-items:center;">
+      <div style="position:relative;width:160px;height:160px;flex-shrink:0;"><canvas id="canal-chart"></canvas></div>
+      <div id="canal-legend" style="flex:1;"></div>
+    </div>
+  </div>
   <div class="stitle">👥 Por SDR</div>
   <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
   <div class="stitle">🌎 Por país</div>
@@ -421,6 +428,7 @@ let miSdr = 'leandro';
 let miPeriod = '2026-06';
 let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
 let chartInst = null;
+let canalChartInst = null;
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -943,6 +951,19 @@ function renderDash() {
   document.getElementById('d-pais-tbl').innerHTML = paisRows;
 
   renderChart(recs);
+
+  // Gráfico de origen de reuniones (filtrado por sdr/país/período)
+  const now3 = new Date();
+  const cm3 = now3.getMonth()+1;
+  const cs3 = Math.ceil(now3.getDate()/7);
+  const reusFilt = getAllReus().filter(r => {
+    if(sdrF!=='all' && r.sdr!==sdrF) return false;
+    if(paisF!=='all'){const pm={Mexico:'MEXICO',Peru:'PERU',Spain:'ESPANA'};if(r.pais!==pm[paisF]) return false;}
+    if(perF==='week')  return r.mes===cm3 && r.semana===cs3;
+    if(perF==='month') return r.mes===cm3;
+    return true;
+  });
+  renderCanalChart(reusFilt);
 }
 
 function renderChart(recs) {
@@ -976,6 +997,41 @@ function renderChart(recs) {
       }
     }
   });
+}
+
+function renderCanalChart(reus) {
+  const canalColors = {REPLY:'#60A5FA',PROSPECCION:'#34D399',LINKEDIN:'#C084FC',LLAMADA:'#FB923C',INBOUND:'#2DD4BF'};
+  const counts = {};
+  reus.forEach(r => { if(r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
+  const total = Object.values(counts).reduce((s,v)=>s+v, 0);
+  if (canalChartInst) { canalChartInst.destroy(); canalChartInst = null; }
+  const legend = document.getElementById('canal-legend');
+  if (!total) {
+    legend.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:.5rem 0;">Sin reuniones para este filtro</p>';
+    return;
+  }
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const labels  = entries.map(([k])=>k);
+  const data    = entries.map(([,v])=>v);
+  const colors  = labels.map(l => canalColors[l]||'#9CA3AF');
+  canalChartInst = new Chart(document.getElementById('canal-chart'), {
+    type: 'doughnut',
+    data: { labels, datasets:[{ data, backgroundColor:colors.map(c=>c+'88'), borderColor:colors, borderWidth:2, hoverOffset:4 }] },
+    options: {
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/total*100)}%)`}}
+      }
+    }
+  });
+  legend.innerHTML = entries.map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:${canalColors[k]||'#9CA3AF'};flex-shrink:0;"></div>
+      <span style="font-size:12px;color:var(--text);flex:1;">${k}</span>
+      <strong style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);">${v}</strong>
+      <span style="font-size:11px;color:var(--muted);min-width:32px;text-align:right;">${Math.round(v/total*100)}%</span>
+    </div>`).join('');
 }
 
 // ─── MI PANEL (EDITABLE) ─────────────────────────────────────
@@ -1476,6 +1532,11 @@ function exportReporte(period) {
     };
   });
 
+  // ── Canal de origen ──
+  const canalCount = {};
+  periodReus.forEach(r => { if(r.canal) canalCount[r.canal]=(canalCount[r.canal]||0)+1; });
+  const canalEntries = Object.entries(canalCount).sort((a,b)=>b[1]-a[1]);
+
   const totContactados = actRecs.reduce((s,r)=>s+n(r.contactados),0);
   const totCampCont    = campPeriod.reduce((s,c)=>s+c.total,0);
   const totAgendadas   = periodReus.length;
@@ -1539,6 +1600,16 @@ tr:nth-child(even) td{background:#FAFAF8;}
   <div class="card"><div class="card-lbl">HOT</div><div class="card-val o">${totHOT}</div></div>
   <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val">$${totPipeline.toLocaleString()}</div></div>
 </div>
+
+<h2>Origen de reuniones</h2>
+${canalEntries.length ? `<table>
+  <tr><th>Canal</th><th>Reuniones</th><th>%</th></tr>
+  ${canalEntries.map(([k,v])=>`<tr>
+    <td><strong>${k}</strong></td>
+    <td class="b">${v}</td>
+    <td>${Math.round(v/periodReus.length*100)}%</td>
+  </tr>`).join('')}
+</table>` : '<p class="nodata">Sin reuniones en el período.</p>'}
 
 <h2>Por SDR</h2>
 <table>
