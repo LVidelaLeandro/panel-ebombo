@@ -218,7 +218,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
   </div>
   <div class="cards" id="d-cards"></div>
-  <div class="stitle" style="margin-top:.5rem;">📈 Actividad por día</div>
+  <div class="stitle" style="margin-top:.5rem;">📈 Actividad por persona</div>
   <div class="chart-wrap"><div class="chart-inner"><canvas id="act-chart" role="img" aria-label="Actividad diaria"></canvas></div></div>
   <div class="stitle">👥 Por SDR</div>
   <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
@@ -734,32 +734,36 @@ function renderDash() {
 }
 
 function renderChart(recs) {
-  const days = {};
+  const sdrNames = ['Leandro','Grace','Carmen'];
+  const bySDR = {};
+  sdrNames.forEach(s => { bySDR[s] = {c:0, re:0, ru:0}; });
   recs.forEach(r => {
-    let fd = (r.fecha||'').toString();
-    if (fd.includes('T')) fd = fd.split('T')[0];
-    if (!fd||fd==='undefined') return;
-    if (!days[fd]) days[fd]={c:0,re:0,ru:0};
-    days[fd].c  += n(r.contactados);
-    days[fd].re += n(r.respuestas);
-    days[fd].ru += n(r.reuniones);
+    const name = (r.sdr||'').trim();
+    if (!bySDR[name]) return;
+    bySDR[name].c  += n(r.contactados);
+    bySDR[name].re += n(r.respuestas);
+    bySDR[name].ru += n(r.reuniones);
   });
-  const sorted = Object.keys(days).sort().slice(-14);
-  const labels = sorted.map(d => d.slice(5).replace('-','/'));
+  const labels = sdrNames;
   if (chartInst) { chartInst.destroy(); chartInst=null; }
   const canvas = document.getElementById('act-chart');
-  if (!sorted.length) { canvas.parentElement.innerHTML='<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>'; return; }
+  const hasData = sdrNames.some(s => bySDR[s].c > 0 || bySDR[s].ru > 0);
+  if (!hasData) { canvas.parentElement.innerHTML='<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>'; return; }
+  const sdrColors = {Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#C084FC'};
   chartInst = new Chart(canvas,{
     type:'bar',
     data:{labels, datasets:[
-      {label:'Contactados',data:sorted.map(d=>days[d].c),backgroundColor:'#60A5FA30',borderColor:'#60A5FA',borderWidth:1.5},
-      {label:'Respuestas', data:sorted.map(d=>days[d].re),backgroundColor:'#FBBF2430',borderColor:'#FBBF24',borderWidth:1.5},
-      {label:'Reuniones',  data:sorted.map(d=>days[d].ru),backgroundColor:'#34D39940',borderColor:'#34D399',borderWidth:1.5},
+      {label:'Contactados', data:sdrNames.map(s=>bySDR[s].c),  backgroundColor:sdrNames.map(s=>sdrColors[s]+'30'), borderColor:sdrNames.map(s=>sdrColors[s]), borderWidth:1.5},
+      {label:'Respuestas',  data:sdrNames.map(s=>bySDR[s].re), backgroundColor:'#FBBF2430', borderColor:'#FBBF24', borderWidth:1.5},
+      {label:'Reuniones',   data:sdrNames.map(s=>bySDR[s].ru), backgroundColor:'#34D39940', borderColor:'#34D399', borderWidth:1.5},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false}},
+      plugins:{
+        legend:{display:true, labels:{color:'#6B7280', font:{size:11}, boxWidth:12}},
+        tooltip:{callbacks:{label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}`}}
+      },
       scales:{
-        x:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}},
+        x:{ticks:{font:{size:11},color:'#9CA3AF'},grid:{color:'rgba(255,255,255,0.04)'}},
         y:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}}
       }
     }
