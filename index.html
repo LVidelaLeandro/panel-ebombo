@@ -540,20 +540,40 @@ const REUNIONES_DATA = [
 function apiFetch(action) {
   return new Promise(resolve => {
     const cb = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const t = setTimeout(() => { delete window[cb]; resolve(null); }, 10000);
-    window[cb] = d => { clearTimeout(t); delete window[cb]; resolve(d); };
+    const url = SCRIPT_URL + '?action=' + action + '&callback=' + cb;
+    console.log('[apiFetch] Iniciando fetch JSONP a:', url);
+    const t = setTimeout(() => {
+      console.warn('[apiFetch] TIMEOUT — el Apps Script no respondió en 10 segundos. URL:', url);
+      delete window[cb];
+      resolve(null);
+    }, 10000);
+    window[cb] = d => {
+      console.log('[apiFetch] Respuesta recibida del Apps Script:', d);
+      clearTimeout(t);
+      delete window[cb];
+      resolve(d);
+    };
     const s = document.createElement('script');
-    s.src = SCRIPT_URL + '?action=' + action + '&callback=' + cb;
-    s.onerror = () => { clearTimeout(t); delete window[cb]; resolve(null); };
+    s.src = url;
+    s.onerror = (err) => {
+      console.error('[apiFetch] Error al cargar el script JSONP (URL inválida o red caída):', url, err);
+      clearTimeout(t);
+      delete window[cb];
+      resolve(null);
+    };
     document.head.appendChild(s);
   });
 }
 
 async function apiPost(body) {
   try {
+    console.log('[apiPost] Enviando POST a:', SCRIPT_URL, body);
     await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify(body)});
     return true;
-  } catch(e) { return false; }
+  } catch(e) {
+    console.error('[apiPost] Error en POST:', e);
+    return false;
+  }
 }
 
 // ─── INIT ────────────────────────────────────────────────────
@@ -571,11 +591,14 @@ async function init() {
 async function loadData() {
   setSyncStatus('spin','actualizando...');
   const btn = document.getElementById('btn-guardar');
+  console.log('[loadData] Llamando apiFetch("get")...');
   const data = await apiFetch('get');
+  console.log('[loadData] Resultado de apiFetch:', data);
   if (data && Array.isArray(data.records)) {
     records = data.records.map(normalizeRecord);
     setSyncStatus('ok','sincronizado');
   } else {
+    console.warn('[loadData] Dato inválido o nulo — activando modo sin conexión. data recibido:', JSON.stringify(data));
     setSyncStatus('off','sin conexión — datos locales');
   }
   renderDash();
