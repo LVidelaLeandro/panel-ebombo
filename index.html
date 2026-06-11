@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eBombo — Panel SDR</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#030712; --s1:#0F172A; --s2:#111827; --s3:#1F2937;
+  --border:#1F2937; --border2:#374151;
+  --text:#F9FAFB; --muted:#6B7280; --muted2:#4B5563;
+  --green:#34D399; --green-bg:#065F4620; --green-border:#065F46;
+  --amber:#FBBF24; --amber-bg:#78350F20;
+  --red:#F87171; --red-bg:#7F1D1D20;
+  --blue:#60A5FA; --blue-bg:#1E3A5F20;
+  --purple:#C084FC;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+/* HEADER */
+.hdr{background:var(--s1);border-bottom:1px solid var(--border);padding:0 1.5rem;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.logo{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;letter-spacing:-.01em;}
+.logo span{color:#34D399;}
+.sync{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#34D399;}
+.sync-dot.off{background:#F87171;}
+.sync-dot.spin{background:#FBBF24;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* NAV */
+.nav{display:flex;gap:2px;padding:.75rem 1.5rem 0;border-bottom:1px solid var(--border);background:var(--s1);position:sticky;top:54px;z-index:99;overflow-x:auto;}
+.ntab{font-size:12px;padding:7px 14px;border:none;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:color .15s;}
+.ntab:hover{color:var(--text);}
+.ntab.on{color:var(--text);font-weight:500;border-bottom-color:var(--green);}
+
+/* MAIN */
+.main{max-width:960px;margin:0 auto;padding:1.5rem;}
+.sec{display:none;}
+.sec.on{display:block;}
+
+/* CARDS GRID */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:1.5rem;}
+.card{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1rem;}
+.card-lbl{font-size:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px;}
+.card-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1;}
+.card-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.card.g .card-val{color:var(--green);}
+.card.b .card-val{color:var(--blue);}
+.card.a .card-val{color:var(--amber);}
+.card.r .card-val{color:var(--red);}
+.card.p .card-val{color:var(--purple);}
+
+/* METRIC CARD (editable) */
+.mcard{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;}
+.mcard-lbl{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
+.editable{cursor:text;font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--text);border-bottom:1px dashed var(--border2);padding-bottom:1px;display:inline-block;}
+.editable:hover{border-bottom-color:var(--green);}
+.editable input{background:var(--s1);border:1px solid var(--muted);border-radius:5px;color:var(--text);font-family:'Syne',sans-serif;font-size:22px;font-weight:800;width:90px;padding:2px 6px;outline:none;}
+.prog-bg{height:3px;background:var(--s3);border-radius:2px;overflow:hidden;margin-top:4px;}
+.prog-bar{height:100%;border-radius:2px;transition:width .4s;}
+.meta-row{font-size:10px;color:var(--muted2);display:flex;justify-content:space-between;margin-top:2px;}
+.meta-edit{cursor:text;border-bottom:1px dashed var(--border2);}
+
+/* SECTION TITLE */
+.stitle{font-size:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+
+/* TABLE */
+.twrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;}
+.twrap table{width:100%;border-collapse:collapse;font-size:12px;}
+.twrap th{background:var(--s1);padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap;position:sticky;top:0;}
+.twrap td{padding:8px 12px;border-bottom:1px solid var(--border);}
+.twrap tr:last-child td{border-bottom:none;}
+.twrap tr:hover td{background:var(--s1);}
+.empty-row td{text-align:center;padding:2rem;color:var(--muted);}
+
+/* PILLS */
+.pill{display:inline-block;font-size:10px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:20px;border:1px solid;}
+.pg{background:var(--green-bg);color:var(--green);border-color:var(--green-border);}
+.pa{background:var(--amber-bg);color:var(--amber);border-color:#78350F;}
+.pr{background:var(--red-bg);color:var(--red);border-color:#7F1D1D;}
+.pb{background:var(--blue-bg);color:var(--blue);border-color:#1E3A5F;}
+.pp{background:#2D1B6920;color:var(--purple);border-color:#4C1D95;}
+.pn{background:var(--s1);color:var(--muted);border-color:var(--border);}
+
+/* FORM */
+.fcard{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+.fg input,.fg select,.fg textarea{font-family:'DM Sans',sans-serif;font-size:13px;border:1px solid var(--border);background:var(--bg);color:var(--text);padding:8px 10px;border-radius:7px;width:100%;}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--border2);}
+.fg.full{grid-column:1/-1;}
+.numrow{display:flex;align-items:center;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:var(--bg);}
+.numrow button{border:none;background:none;padding:7px 11px;cursor:pointer;color:var(--muted);font-size:16px;}
+.numrow button:hover{background:var(--s3);color:var(--text);}
+.numrow input{border:none;border-left:1px solid var(--border);border-right:1px solid var(--border);border-radius:0;text-align:center;width:60px;font-size:13px;background:var(--bg);color:var(--text);padding:7px 4px;}
+
+/* BTNS */
+.btn-primary{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;padding:10px 24px;background:var(--green);color:#030712;border:none;border-radius:7px;cursor:pointer;transition:opacity .15s;}
+.btn-primary:hover{opacity:.85;}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.btn-sm{font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-sm:hover{background:var(--s2);color:var(--text);}
+
+/* ALERT */
+.alert{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:1rem;display:none;}
+.alert.show{display:block;}
+.alert.ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);}
+.alert.err{background:var(--red-bg);color:var(--red);border:1px solid #7F1D1D;}
+
+/* SDR SELECTOR */
+.sdr-row{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.sdr-btn{display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;transition:all .15s;}
+.sdr-btn:hover{border-color:var(--border2);color:var(--text);}
+.sdr-btn.on{color:var(--text);font-weight:500;}
+.sdr-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
+
+/* PERIOD SELECTOR */
+.period-row{display:flex;gap:6px;margin-bottom:1.5rem;flex-wrap:wrap;}
+.period-btn{font-size:11px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--muted);font-family:'DM Mono',monospace;transition:all .15s;}
+.period-btn:hover{color:var(--text);}
+.period-btn.on{background:var(--s2);color:var(--text);border-color:var(--border2);}
+
+/* CHART */
+.chart-wrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;}
+.chart-inner{position:relative;width:100%;height:200px;}
+
+/* RANK CARDS */
+.rank-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem;}
+.rcard{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center;}
+.rcard.first{background:var(--green-bg);border-color:var(--green-border);}
+.rcard-pos{font-size:10px;color:var(--muted);margin-bottom:3px;font-family:'DM Mono',monospace;}
+.rcard-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin-bottom:6px;}
+.rcard.first .rcard-name{color:var(--green);}
+.rcard-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;}
+.rcard.first .rcard-val{color:var(--green);}
+.rcard-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+
+/* MEETINS TABLE colors */
+.won{color:var(--green);}
+.hot{color:var(--amber);}
+.lost{color:var(--red);}
+
+/* TABS (inside sections) */
+.itabs{display:flex;gap:4px;margin-bottom:1rem;}
+.itab{font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--muted);font-family:'DM Sans',sans-serif;}
+.itab.on{background:var(--s2);color:var(--text);border-color:var(--border2);}
+
+/* FILTERS */
+.filters{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center;}
+.filters label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
+.filters select{font-size:12px;border:1px solid var(--border);background:var(--s2);color:var(--text);padding:5px 8px;border-radius:6px;font-family:'DM Sans',sans-serif;}
+
+/* RESPONSIVE */
+@media(max-width:640px){
+  .main{padding:1rem;}
+  .fgrid{grid-template-columns:1fr;}
+  .rank-cards{grid-template-columns:1fr;}
+  .cards{grid-template-columns:1fr 1fr;}
+  .nav{padding:.5rem 1rem 0;}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">e<span>Bombo</span> <span style="font-weight:300;color:#374151;font-size:12px;">/ Panel SDR</span></div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div id="hdr-date" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></div>
+    <div class="sync"><div class="sync-dot" id="sync-dot"></div><span id="sync-lbl">conectando...</span></div>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="ntab on"  onclick="go('dash')">Dashboard</button>
+  <button class="ntab"     onclick="go('mi')">Mi Panel</button>
+  <button class="ntab"     onclick="go('reg')">Registrar</button>
+  <button class="ntab"     onclick="go('hist')">Historial</button>
+  <button class="ntab"     onclick="go('reus')">Reuniones</button>
+  <button class="ntab"     onclick="go('rank')">Ranking</button>
+  <button class="ntab"     onclick="go('camps')">Campañas</button>
+</nav>
+
+<main class="main">
+
+<div class="alert" id="main-alert"></div>
+
+<!-- ═══════ DASHBOARD ═══════ -->
+<section id="sec-dash" class="sec on">
+  <div class="filters" style="margin-bottom:1.5rem;">
+    <label>SDR</label>
+    <select id="d-sdr" onchange="renderDash()">
+      <option value="all">Todos</option>
+      <option value="Leandro">Leandro</option>
+      <option value="Grace">Grace</option>
+      <option value="Carmen">Carmen</option>
+      <option value="Angela">Angela</option>
+    </select>
+    <label>País</label>
+    <select id="d-pais" onchange="renderDash()">
+      <option value="all">Todos</option>
+      <option value="Mexico">México</option>
+      <option value="Peru">Perú</option>
+      <option value="Spain">España</option>
+    </select>
+    <label>Período</label>
+    <select id="d-period" onchange="renderDash()">
+      <option value="all">Todo</option>
+      <option value="week">Esta semana</option>
+      <option value="month">Este mes</option>
+    </select>
+    <button class="btn-sm" onclick="loadData()">↻ Actualizar</button>
+    <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
+    <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
+  </div>
+  <div class="cards" id="d-cards"></div>
+  <div class="stitle" style="margin-top:.5rem;">📈 Actividad por día</div>
+  <div class="chart-wrap"><div class="chart-inner"><canvas id="act-chart" role="img" aria-label="Actividad diaria"></canvas></div></div>
+  <div class="stitle">👥 Por SDR</div>
+  <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
+  <div class="stitle">🌎 Por país</div>
+  <div class="twrap"><table><thead><tr><th>País</th><th>Contactados</th><th>Respuestas</th><th>Tasa resp.</th><th>Reuniones</th><th>Canal top</th></tr></thead><tbody id="d-pais-tbl"></tbody></table></div>
+</section>
+
+<!-- ═══════ MI PANEL (SDR individual editable) ═══════ -->
+<section id="sec-mi" class="sec">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px;">
+    <div class="sdr-row" id="mi-sdr-row"></div>
+    <div class="period-row" id="mi-period-row"></div>
+  </div>
+  <div id="mi-profile" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--s1);border:1px solid var(--border);border-radius:10px;margin-bottom:1.5rem;">
+    <div id="mi-avatar" style="width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;"></div>
+    <div>
+      <div id="mi-name" style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;"></div>
+      <div id="mi-sub" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></div>
+    </div>
+    <div style="margin-left:auto;font-size:10px;color:var(--muted2);">clic en cualquier número para editar</div>
+    <button class="btn-sm" id="mi-save-btn" onclick="saveMiPanel()" style="color:var(--green);border-color:var(--green-border);">💾 Guardar</button>
+  </div>
+  <div class="itabs">
+    <button class="itab on" onclick="miTab('out')">🚀 Outbound</button>
+    <button class="itab"    onclick="miTab('ib')">📥 Inbound</button>
+    <button class="itab"    onclick="miTab('comp')">📊 Comparativa</button>
+  </div>
+  <div id="mi-out"></div>
+  <div id="mi-ib" style="display:none;"></div>
+  <div id="mi-comp" style="display:none;"></div>
+</section>
+
+<!-- ═══════ REGISTRAR ═══════ -->
+<section id="sec-reg" class="sec">
+  <div class="alert" id="reg-ok"></div>
+  <div class="fcard">
+    <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nuevo registro diario</div>
+    <div class="fgrid" style="margin-top:1rem;">
+      <div class="fg"><label>SDR</label>
+        <select id="f-sdr">
+          <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option>
+        </select>
+      </div>
+      <div class="fg"><label>Fecha</label><input type="date" id="f-fecha"></div>
+      <div class="fg"><label>País</label>
+        <select id="f-pais"><option value="Mexico">México</option><option value="Peru">Perú</option><option value="Spain">España</option></select>
+      </div>
+      <div class="fg"><label>Canal</label>
+        <select id="f-canal"><option>Email</option><option>LinkedIn</option><option>Llamada</option><option>WhatsApp</option><option>Otros</option></select>
+      </div>
+      <div class="fg"><label>Contactados</label>
+        <div class="numrow"><button onclick="dec('f-cont')">−</button><input type="number" id="f-cont" value="0" min="0"><button onclick="inc('f-cont')">+</button></div>
+      </div>
+      <div class="fg"><label>Respuestas</label>
+        <div class="numrow"><button onclick="dec('f-resp')">−</button><input type="number" id="f-resp" value="0" min="0"><button onclick="inc('f-resp')">+</button></div>
+      </div>
+      <div class="fg"><label>Positivas</label>
+        <div class="numrow"><button onclick="dec('f-pos')">−</button><input type="number" id="f-pos" value="0" min="0"><button onclick="inc('f-pos')">+</button></div>
+      </div>
+      <div class="fg"><label>Reuniones</label>
+        <div class="numrow"><button onclick="dec('f-reus')">−</button><input type="number" id="f-reus" value="0" min="0"><button onclick="inc('f-reus')">+</button></div>
+      </div>
+      <div class="fg full"><label>Notas / Campaña</label><input type="text" id="f-notas" placeholder="Ej: PER_001 Marketing, llamadas España..."></div>
+    </div>
+    <button class="btn-primary" id="btn-guardar" onclick="guardar()">Guardar registro</button>
+  </div>
+</section>
+
+<!-- ═══════ HISTORIAL ═══════ -->
+<section id="sec-hist" class="sec">
+  <div class="filters">
+    <label>SDR</label><select id="h-sdr" onchange="renderHist()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option></select>
+    <label>País</label><select id="h-pais" onchange="renderHist()"><option value="all">Todos</option><option value="Mexico">México</option><option value="Peru">Perú</option><option value="Spain">España</option></select>
+    <button class="btn-sm" onclick="exportCSV()">CSV</button>
+    <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
+    <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
+  </div>
+  <div class="twrap"><table><thead><tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Respuestas</th><th>Positivas</th><th>Reuniones</th><th>Tasa</th><th>Notas</th></tr></thead><tbody id="h-tbl"></tbody></table></div>
+</section>
+
+<!-- ═══════ REUNIONES ═══════ -->
+<section id="sec-reus" class="sec">
+  <div class="filters">
+    <label>SDR</label><select id="re-sdr" onchange="renderReus()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select>
+    <label>País</label><select id="re-pais" onchange="renderReus()"><option value="all">Todos</option><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select>
+    <label>Mes</label><select id="re-mes" onchange="renderReus()"><option value="all">Todos</option><option value="2">Mes 2</option><option value="3">Mes 3</option><option value="4">Mes 4</option><option value="5">Mes 5</option><option value="6">Mes 6</option></select>
+    <label>Estado</label><select id="re-estado" onchange="renderReus()"><option value="all">Todos</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="HOT">HOT</option><option value="SI">Con propuesta</option><option value="NO">Sin propuesta</option></select>
+    </div>
+    <button class="btn-primary" onclick="showAddReu()" style="font-size:12px;padding:8px 16px;">+ Nueva reunión</button>
+  </div>
+  <!-- Form nueva reunión -->
+  <div id="reu-form" style="display:none;" class="fcard">
+    <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nueva reunión</div>
+    <div class="fgrid" style="margin-top:1rem;">
+      <div class="fg"><label>SDR</label><select id="nr-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select></div>
+      <div class="fg"><label>Empresa</label><input type="text" id="nr-empresa" placeholder="Nombre de la empresa"></div>
+      <div class="fg"><label>País</label><select id="nr-pais"><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select></div>
+      <div class="fg"><label>Canal</label><select id="nr-canal"><option>REPLY</option><option>PROSPECCION</option><option>LINKEDIN</option><option>LLAMADA</option><option>INBOUND</option></select></div>
+      <div class="fg"><label>¿Se realizó?</label><select id="nr-realizada"><option value="SI">Sí</option><option value="NO">No</option></select></div>
+      <div class="fg"><label>¿Salió cotización?</label><select id="nr-cot"><option value="SI">Sí</option><option value="NO">No</option></select></div>
+      <div class="fg"><label>Estado</label><select id="nr-estado"><option value="">En proceso</option><option value="HOT">HOT</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="PENDIENTE">Pendiente</option></select></div>
+      <div class="fg"><label>Monto USD</label><div class="numrow"><button onclick="dec('nr-monto')">−</button><input type="number" id="nr-monto" value="0" min="0"><button onclick="inc('nr-monto')">+</button></div></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" onclick="addReu()" style="font-size:12px;padding:8px 16px;">Guardar reunión</button>
+      <button class="btn-sm" onclick="document.getElementById('reu-form').style.display='none'">Cancelar</button>
+    </div>
+  </div>
+  <div class="cards" id="re-cards"></div>
+  <div class="twrap"><table><thead><tr><th>M/S</th><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto</th></tr></thead><tbody id="re-tbl"></tbody></table></div>
+</section>
+
+<!-- ═══════ RANKING ═══════ -->
+<section id="sec-rank" class="sec">
+  <div class="stitle">🏆 Ranking del mes — reuniones agendadas</div>
+  <div class="rank-cards" id="rank-cards"></div>
+  <div class="stitle" style="margin-top:1.5rem;">📋 Comparativa completa</div>
+  <div class="twrap"><table><thead><tr><th>#</th><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th></tr></thead><tbody id="rank-tbl"></tbody></table></div>
+</section>
+
+
+<!-- ═══════ CAMPAÑAS ═══════ -->
+<section id="sec-camps" class="sec">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px;">
+    <div class="filters">
+      <label>SDR</label>
+      <select id="c-sdr" onchange="renderCamps()">
+        <option value="all">Todos</option>
+        <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Grupal</option>
+      </select>
+      <label>País</label>
+      <select id="c-pais" onchange="renderCamps()">
+        <option value="all">Todos</option>
+        <option>España</option><option>México</option><option>Perú</option><option>Global</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="showAddCamp()" style="font-size:12px;padding:8px 16px;">+ Nueva campaña</button>
+  </div>
+
+  <!-- Resumen por SDR -->
+  <div class="cards" id="c-cards" style="margin-bottom:1.5rem;"></div>
+
+  <!-- Form nueva campaña -->
+  <div id="c-form" style="display:none;" class="fcard" style="margin-bottom:1.5rem;">
+    <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nueva campaña</div>
+    <div class="fgrid" style="margin-top:1rem;">
+      <div class="fg"><label>SDR</label>
+        <select id="nc-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Grupal</option></select>
+      </div>
+      <div class="fg"><label>País</label>
+        <select id="nc-pais"><option>España</option><option>México</option><option>Perú</option><option>Global</option></select>
+      </div>
+      <div class="fg"><label>Fecha de envío</label><input type="date" id="nc-fecha"></div>
+      <div class="fg"><label>Contactos enviados</label>
+        <div class="numrow"><button onclick="dec('nc-cont')">−</button><input type="number" id="nc-cont" value="0" min="0"><button onclick="inc('nc-cont')">+</button></div>
+      </div>
+      <div class="fg full"><label>Nombre de campaña</label><input type="text" id="nc-nombre" placeholder="Ej: MEX_001_Marketing - Leandro"></div>
+      <div class="fg"><label>Respuestas</label>
+        <div class="numrow"><button onclick="dec('nc-resp')">−</button><input type="number" id="nc-resp" value="0" min="0"><button onclick="inc('nc-resp')">+</button></div>
+      </div>
+      <div class="fg"><label>Reuniones generadas</label>
+        <div class="numrow"><button onclick="dec('nc-reus')">−</button><input type="number" id="nc-reus" value="0" min="0"><button onclick="inc('nc-reus')">+</button></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" onclick="addCamp()" style="font-size:12px;padding:8px 16px;">Guardar campaña</button>
+      <button class="btn-sm" onclick="document.getElementById('c-form').style.display='none'">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Tabla campañas -->
+  <div class="twrap">
+    <table>
+      <thead><tr>
+        <th>SDR</th><th>País</th><th>Fecha envío</th><th>Nombre campaña</th>
+        <th>Contactos</th><th>Respuestas</th><th>Reuniones</th><th>Tasa</th><th>Acciones</th>
+      </tr></thead>
+      <tbody id="c-tbl"></tbody>
+    </table>
+  </div>
+</section>
+</main>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────
+const SCRIPT_URL = 'PEGAR_URL_AQUI';
+
+const SDRS = [
+  {id:'leandro', label:'Leandro', role:'SDR',        color:'#60A5FA', avatar:'LE'},
+  {id:'grace',   label:'Grace',   role:'Senior SDR', color:'#34D399', avatar:'GR'},
+  {id:'carmen',  label:'Carmen',  role:'Senior SDR', color:'#C084FC', avatar:'CA'},
+];
+
+const PERIODS = [
+  {value:'2026-01',label:'Ene 2026'},{value:'2026-02',label:'Feb 2026'},
+  {value:'2026-03',label:'Mar 2026'},{value:'2026-04',label:'Abr 2026'},
+  {value:'2026-05',label:'May 2026'},{value:'2026-06',label:'Jun 2026'},
+  {value:'2026-07',label:'Jul 2026'},{value:'2026-08',label:'Ago 2026'},
+  {value:'2026-09',label:'Sep 2026'},{value:'2026-10',label:'Oct 2026'},
+  {value:'2026-11',label:'Nov 2026'},{value:'2026-12',label:'Dic 2026'},
+];
+
+// ─── STATE ────────────────────────────────────────────────────
+let records = [];
+let miSdr = 'leandro';
+let miPeriod = '2026-06';
+let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
+let chartInst = null;
+
+// ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
+const REUNIONES_DATA = [
+  {mes:2,semana:1,sdr:'Grace',empresa:'COOP Spirits',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'NO',estado:'NO',monto:0},
+  {mes:2,semana:1,sdr:'Carmen',empresa:'Grupo GP',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:25000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Ascendion Engineering',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Akka Spain',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Plenergy',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:15000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Allot',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:10000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Bluesun',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'HOT',monto:1000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Lider Peru',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:8300},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Sebalfarma',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:3000},
+  {mes:2,semana:1,sdr:'Grace',empresa:'Universidad Continental',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'HOT',monto:42000},
+  {mes:2,semana:2,sdr:'Grace',empresa:'Stalwart Leather',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:10000},
+  {mes:2,semana:2,sdr:'Grace',empresa:'Argal Alimentacion',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:2000},
+  {mes:2,semana:2,sdr:'Grace',empresa:'Staff Boom',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'HOT',monto:17000},
+  {mes:2,semana:2,sdr:'Leandro',empresa:'Yango Group',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:10000},
+  {mes:2,semana:3,sdr:'Grace',empresa:'Ambit BST',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:14000},
+  {mes:2,semana:3,sdr:'Grace',empresa:'koltin',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:500},
+  {mes:2,semana:3,sdr:'Carmen',empresa:'S4Learning',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:3000},
+  {mes:2,semana:3,sdr:'Carmen',empresa:'One-Line',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:7164},
+  {mes:2,semana:3,sdr:'Carmen',empresa:'PBGroup',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:4670},
+  {mes:2,semana:3,sdr:'Carmen',empresa:'Heineken',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:3,sdr:'Leandro',empresa:'Utility Trailers de Mexico',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:20000},
+  {mes:2,semana:3,sdr:'Carmen',empresa:'Nexsys',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:2500},
+  {mes:2,semana:3,sdr:'Grace',empresa:'Mendel',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:3,sdr:'Grace',empresa:'Binswanger',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:1194},
+  {mes:2,semana:3,sdr:'Grace',empresa:'Venture Electronics Spain',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:4,sdr:'Leandro',empresa:'Electrodata Peru',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'LOST',monto:29000},
+  {mes:2,semana:4,sdr:'Grace',empresa:'Hills Pet Nutrition',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:4,sdr:'Grace',empresa:'Welbe Care',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:4,sdr:'Carmen',empresa:'Sperientia',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:2,semana:4,sdr:'Carmen',empresa:'Geovictoria',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:840},
+  {mes:3,semana:1,sdr:'Carmen',empresa:'Anddes',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:750},
+  {mes:3,semana:1,sdr:'Grace',empresa:'Universidad del Noreste',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:1,sdr:'Grace',empresa:'Isil',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'HOT',monto:9000},
+  {mes:3,semana:3,sdr:'Grace',empresa:'DACHSER',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:1,sdr:'Carmen',empresa:'Grupo Bafar',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:2600},
+  {mes:3,semana:1,sdr:'Grace',empresa:'Agora',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:1,sdr:'Leandro',empresa:'PACIFIC GROUP S.L',realizada:'SI',pais:'ESPANA',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:2,sdr:'Grace',empresa:'Celsa',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:2,sdr:'Leandro',empresa:'Ferreyros',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:700},
+  {mes:3,semana:2,sdr:'Grace',empresa:'WACKER',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:2,sdr:'Grace',empresa:'Johnson & Johnson',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:2,sdr:'Grace',empresa:'APOYO Comunicacion',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'HOT',monto:20000},
+  {mes:3,semana:2,sdr:'Grace',empresa:'Bitel',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'HOT',monto:90000},
+  {mes:3,semana:2,sdr:'Grace',empresa:'APOYO Comunicacion',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'HOT',monto:20000},
+  {mes:3,semana:2,sdr:'Carmen',empresa:'Consorsi',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:3000},
+  {mes:3,semana:2,sdr:'Leandro',empresa:'Agrobanco',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:85000},
+  {mes:3,semana:3,sdr:'Carmen',empresa:'AJE Group',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:2800},
+  {mes:3,semana:3,sdr:'Carmen',empresa:'SkyAngel',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:3000},
+  {mes:3,semana:3,sdr:'Leandro',empresa:'Kashin',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:4,sdr:'Leandro',empresa:'Bilingual Global',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'LOST',monto:11500},
+  {mes:3,semana:2,sdr:'Carmen',empresa:'3zero',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:4444},
+  {mes:3,semana:4,sdr:'Grace',empresa:'Swatch Group',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:4,sdr:'Carmen',empresa:'Kasnet',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:3432},
+  {mes:3,semana:4,sdr:'Grace',empresa:'Aticco',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:4,sdr:'Grace',empresa:'Pronatura',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:4,sdr:'Leandro',empresa:'Wivboost',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:3,semana:4,sdr:'Leandro',empresa:'Excelling',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:4,semana:2,sdr:'Grace',empresa:'Viajes El Corte Ingles',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:4,semana:1,sdr:'Grace',empresa:'EXPOPUBLICITAS',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:6585},
+  {mes:4,semana:3,sdr:'Leandro',empresa:'Business France Mexico',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:5700},
+  {mes:4,semana:3,sdr:'Leandro',empresa:'ITW',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:19191},
+  {mes:4,semana:3,sdr:'Leandro',empresa:'Forma Tu Cuerpo',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:2000},
+  {mes:4,semana:3,sdr:'Grace',empresa:'American Industries',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1000},
+  {mes:4,semana:3,sdr:'Grace',empresa:'Angloamerican',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:4,semana:3,sdr:'Grace',empresa:'SwissCapitals',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:440},
+  {mes:4,semana:3,sdr:'Carmen',empresa:'Zaleos',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:4200},
+  {mes:4,semana:4,sdr:'Grace',empresa:'ASF S.A.C',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:4,semana:4,sdr:'Grace',empresa:'INEL',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'LOST',monto:4148},
+  {mes:4,semana:4,sdr:'Grace',empresa:'Casa Toro',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'LOST',monto:3000},
+  {mes:4,semana:4,sdr:'Leandro',empresa:'SK DEYSU',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1700},
+  {mes:4,semana:5,sdr:'Grace',empresa:'Bankaya',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:20160},
+  {mes:4,semana:5,sdr:'Leandro',empresa:'Kallpa Generacion',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:90000},
+  {mes:4,semana:5,sdr:'Grace',empresa:'Finout',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:80000},
+  {mes:4,semana:4,sdr:'Leandro',empresa:'Recamier',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:5600},
+  {mes:4,semana:2,sdr:'Grace',empresa:'Zenergy Liverpool',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'WON',monto:144469},
+  {mes:4,semana:5,sdr:'Carmen',empresa:'Promart',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:30000},
+  {mes:4,semana:5,sdr:'Carmen',empresa:'Allianz',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:8000},
+  {mes:5,semana:2,sdr:'Grace',empresa:'Avio',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:8778},
+  {mes:5,semana:2,sdr:'Leandro',empresa:'Brandiun',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:57850},
+  {mes:5,semana:2,sdr:'Leandro',empresa:'Galenicum',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:2,sdr:'Leandro',empresa:'O-tek',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:7000},
+  {mes:5,semana:3,sdr:'Grace',empresa:'Wobi',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1741},
+  {mes:5,semana:4,sdr:'Leandro',empresa:'Toshiba gcs',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:2,sdr:'Grace',empresa:'Praxisglobe',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:3,sdr:'Leandro',empresa:'DIH Andalucia Agrotech',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:4000},
+  {mes:5,semana:4,sdr:'Grace',empresa:'Wan Hai Lines',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:8768},
+  {mes:5,semana:3,sdr:'Grace',empresa:'BioScience',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:8191},
+  {mes:5,semana:3,sdr:'Leandro',empresa:'Mercantil',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1463},
+  {mes:5,semana:3,sdr:'Leandro',empresa:'Ancora',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:2000},
+  {mes:5,semana:5,sdr:'Leandro',empresa:'TMX',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'WON',monto:462},
+  {mes:5,semana:5,sdr:'Grace',empresa:'Financiera ProEmpresa',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:11700},
+  {mes:5,semana:4,sdr:'Grace',empresa:'Onpe',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1169},
+  {mes:5,semana:3,sdr:'Leandro',empresa:'Hydrafacial',realizada:'SI',pais:'MEXICO',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:6688},
+  {mes:5,semana:3,sdr:'Grace',empresa:'MEDICINA METABOLICA',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1744},
+  {mes:5,semana:2,sdr:'Grace',empresa:'Sanmina',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:2,sdr:'Grace',empresa:'ASTRO RISK',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:5,sdr:'Grace',empresa:'Choice Hotels',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:4622},
+  {mes:5,semana:4,sdr:'Grace',empresa:'Merieux NutriSciences',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:2337},
+  {mes:5,semana:4,sdr:'Grace',empresa:'Agrovet Market',realizada:'SI',pais:'PERU',canal:'REPLY',cotizacion:'SI',estado:'',monto:2040},
+  {mes:5,semana:5,sdr:'Leandro',empresa:'Sourcing',realizada:'SI',pais:'MEXICO',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:4,sdr:'Leandro',empresa:'Touch Latam',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:4,sdr:'Grace',empresa:'IRON MOUNTAIN',realizada:'SI',pais:'ESPANA',canal:'REPLY',cotizacion:'SI',estado:'',monto:1000},
+  {mes:5,semana:4,sdr:'Leandro',empresa:'Abada',realizada:'SI',pais:'ESPANA',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:45},
+  {mes:6,semana:1,sdr:'Leandro',empresa:'Gyumar',realizada:'SI',pais:'PERU',canal:'PROSPECCION',cotizacion:'SI',estado:'',monto:42000},
+];
+
+// ─── APPS SCRIPT: JSONP GET ───────────────────────────────────
+function apiFetch(action) {
+  return new Promise(resolve => {
+    const cb = '_cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const t = setTimeout(() => { delete window[cb]; resolve(null); }, 10000);
+    window[cb] = d => { clearTimeout(t); delete window[cb]; resolve(d); };
+    const s = document.createElement('script');
+    s.src = SCRIPT_URL + '?action=' + action + '&callback=' + cb;
+    s.onerror = () => { clearTimeout(t); delete window[cb]; resolve(null); };
+    document.head.appendChild(s);
+  });
+}
+
+async function apiPost(body) {
+  try {
+    await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify(body)});
+    return true;
+  } catch(e) { return false; }
+}
+
+// ─── INIT ────────────────────────────────────────────────────
+async function init() {
+  document.getElementById('hdr-date').textContent =
+    new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('f-fecha').value = new Date().toISOString().split('T')[0];
+  setSyncStatus('spin','conectando...');
+  buildMiPanel();
+  await loadData();
+  renderReus();
+  renderRanking();
+}
+
+async function loadData() {
+  setSyncStatus('spin','actualizando...');
+  const btn = document.getElementById('btn-guardar');
+  const data = await apiFetch('get');
+  if (data && Array.isArray(data.records)) {
+    records = data.records.map(normalizeRecord);
+    setSyncStatus('ok','sincronizado');
+  } else {
+    setSyncStatus('off','sin conexión — datos locales');
+  }
+  renderDash();
+  renderHist();
+  renderRanking();
+}
+
+function setSyncStatus(state, txt) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-lbl');
+  dot.className = 'sync-dot' + (state==='spin'?' spin':state==='off'?' off':'');
+  lbl.textContent = txt;
+}
+
+// ─── NORMALIZE ───────────────────────────────────────────────
+function n(v){ return parseInt(v)||0; }
+function normalizeRecord(r) {
+  const norm = {};
+  Object.keys(r).forEach(k => {
+    const key = k.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    norm[key] = r[k];
+  });
+  let fecha = norm.fecha||'';
+  if (fecha && String(fecha).includes('T')) fecha = String(fecha).split('T')[0];
+  return {
+    id:          norm.id||Date.now(),
+    fecha:       fecha,
+    sdr:         String(norm.sdr||'').trim(),
+    pais:        String(norm.pais||'').trim(),
+    canal:       String(norm.canal||'').trim(),
+    contactados: n(norm.contactados),
+    respuestas:  n(norm.respuestas),
+    positivas:   n(norm.positivas),
+    reuniones:   n(norm.reuniones),
+    notas:       String(norm.notas||'').trim(),
+  };
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────
+function filtered(sdrF, paisF, periodF) {
+  const now = new Date();
+  return records.filter(r => {
+    if (sdrF!=='all' && r.sdr!==sdrF) return false;
+    if (paisF!=='all' && r.pais!==paisF) return false;
+    if (periodF==='week') { if((now-new Date(r.fecha))/86400000>7) return false; }
+    else if (periodF==='month') {
+      const d=new Date(r.fecha);
+      if(d.getMonth()!==now.getMonth()||d.getFullYear()!==now.getFullYear()) return false;
+    }
+    return true;
+  });
+}
+function agg(recs) {
+  return recs.reduce((a,r)=>({
+    contactados:a.contactados+n(r.contactados),
+    respuestas:a.respuestas+n(r.respuestas),
+    positivas:a.positivas+n(r.positivas),
+    reuniones:a.reuniones+n(r.reuniones),
+  }),{contactados:0,respuestas:0,positivas:0,reuniones:0});
+}
+function pct(a,b){ return b ? Math.round(a/b*100)+'%' : '0%'; }
+function pillClass(r){ return r>=5?'pg':r>=2?'pa':'pr'; }
+function flag(p){ return p==='Mexico'?'🇲🇽':p==='Peru'?'🇵🇪':'🇪🇸'; }
+function paisLabel(p){ return p==='Mexico'?'México':p==='Spain'?'España':p; }
+function fmt(n){ return Number(n).toLocaleString('es-PE'); }
+function inc(id){const e=document.getElementById(id);e.value=Math.max(0,(parseInt(e.value)||0)+1);}
+function dec(id){const e=document.getElementById(id);e.value=Math.max(0,(parseInt(e.value)||0)-1);}
+
+// ─── DASHBOARD ───────────────────────────────────────────────
+function renderDash() {
+  const sdrF   = document.getElementById('d-sdr').value;
+  const paisF  = document.getElementById('d-pais').value;
+  const perF   = document.getElementById('d-period').value;
+  const recs   = filtered(sdrF, paisF, perF);
+  const t      = agg(recs);
+  const tR     = t.contactados ? Math.round(t.respuestas/t.contactados*100) : 0;
+  const tC     = t.respuestas  ? Math.round(t.reuniones/t.respuestas*100) : 0;
+
+  // Weekly breakdown
+  const now2 = new Date();
+  const weekStart = new Date(now2); weekStart.setDate(now2.getDate()-now2.getDay()+1);
+  const weekRecs = recs.filter(r=>new Date(r.fecha)>=weekStart);
+  const tw = agg(weekRecs);
+  const cotizaciones = getAllReus().filter(r=>{
+    if(sdrF!=='all'&&r.sdr!==sdrF) return false;
+    if(paisF!=='all'){const pm={Mexico:'MEXICO',Peru:'PERU',Spain:'ESPANA'};if(r.pais!==pm[paisF]) return false;}
+    return r.cotizacion==='SI'&&r.monto>0;
+  });
+  const totalCot = cotizaciones.reduce((a,r)=>a+(r.monto||0),0);
+  document.getElementById('d-cards').innerHTML = `
+    <div class="card b"><div class="card-lbl">Contactados</div><div class="card-val">${t.contactados.toLocaleString()}</div><div class="card-sub">semana: ${tw.contactados}</div></div>
+    <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${t.reuniones}</div><div class="card-sub">semana: ${tw.reuniones}</div></div>
+    <div class="card a"><div class="card-lbl">Cotizaciones</div><div class="card-val">${cotizaciones.length}</div><div class="card-sub">$${Math.round(totalCot/1000)}k pipeline</div></div>
+    <div class="card g"><div class="card-lbl">WON</div><div class="card-val">${getAllReus().filter(r=>r.estado==='WON'&&(sdrF==='all'||r.sdr===sdrF)).length}</div><div class="card-sub">cerrados</div></div>`;
+
+  // Por SDR
+  const sdrRows = ['Leandro','Grace','Carmen'].map(sdr => {
+    const sr = filtered(sdr, paisF, perF);
+    const s  = agg(sr);
+    const c  = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
+    const cc = {};
+    sr.forEach(x => { if(x.canal) cc[x.canal]=(cc[x.canal]||0)+1; });
+    const top = Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||'—';
+    const sdrInfo = SDRS.find(x=>x.label===sdr)||{color:'#6B7280',avatar:sdr.slice(0,2).toUpperCase()};
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:26px;height:26px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${sdrInfo.color}">${sdrInfo.avatar}</div>
+        <strong>${sdr}</strong></div></td>
+      <td>${s.contactados.toLocaleString()}</td>
+      <td><strong>${s.reuniones}</strong></td>
+      <td><span class="pill ${c>=1?'pg':'pa'}">${c}%</span></td>
+      <td><span class="pill pb">${top}</span></td></tr>`;
+  }).join('');
+  document.getElementById('d-sdr-tbl').innerHTML = sdrRows||'<tr class="empty-row"><td colspan="8">Sin datos para este período</td></tr>';
+
+  // Por país
+  const paisRows = ['Mexico','Peru','Spain'].map(p => {
+    const pr = filtered(sdrF, p, perF);
+    const s  = agg(pr);
+    const r  = s.contactados ? Math.round(s.respuestas/s.contactados*100) : 0;
+    const cc = {};
+    pr.forEach(x => { if(x.canal) cc[x.canal]=(cc[x.canal]||0)+1; });
+    const top = Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||'—';
+    return `<tr><td>${flag(p)} ${paisLabel(p)}</td>
+      <td>${s.contactados.toLocaleString()}</td><td>${s.respuestas}</td>
+      <td><span class="pill ${pillClass(r)}">${r}%</span></td>
+      <td><strong>${s.reuniones}</strong></td>
+      <td><span class="pill pb">${top}</span></td></tr>`;
+  }).join('');
+  document.getElementById('d-pais-tbl').innerHTML = paisRows;
+
+  renderChart(recs);
+}
+
+function renderChart(recs) {
+  const days = {};
+  recs.forEach(r => {
+    let fd = (r.fecha||'').toString();
+    if (fd.includes('T')) fd = fd.split('T')[0];
+    if (!fd||fd==='undefined') return;
+    if (!days[fd]) days[fd]={c:0,re:0,ru:0};
+    days[fd].c  += n(r.contactados);
+    days[fd].re += n(r.respuestas);
+    days[fd].ru += n(r.reuniones);
+  });
+  const sorted = Object.keys(days).sort().slice(-14);
+  const labels = sorted.map(d => d.slice(5).replace('-','/'));
+  if (chartInst) { chartInst.destroy(); chartInst=null; }
+  const canvas = document.getElementById('act-chart');
+  if (!sorted.length) { canvas.parentElement.innerHTML='<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>'; return; }
+  chartInst = new Chart(canvas,{
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Contactados',data:sorted.map(d=>days[d].c),backgroundColor:'#60A5FA30',borderColor:'#60A5FA',borderWidth:1.5},
+      {label:'Respuestas', data:sorted.map(d=>days[d].re),backgroundColor:'#FBBF2430',borderColor:'#FBBF24',borderWidth:1.5},
+      {label:'Reuniones',  data:sorted.map(d=>days[d].ru),backgroundColor:'#34D39940',borderColor:'#34D399',borderWidth:1.5},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+}
+
+// ─── MI PANEL (EDITABLE) ─────────────────────────────────────
+const DEFAULT_OUT = {calls:0,emails:0,linkedin:0,pe_comp:0,pe_pipe:0,mx_comp:0,mx_pipe:0,es_comp:0,es_pipe:0,m_sch:0,m_done:0,g_calls:60,g_emails:150,g_linkedin:80,g_m_sch:15,g_m_done:12,g_pipe:30000};
+const DEFAULT_IB  = {leads:0,contacted:0,meetings:0,recip:0,pipeline:0,g_leads:50,g_contacted:45,g_meetings:20,g_pipeline:25000};
+
+function getMiData(sdr, period) {
+  const k = sdr+'_'+period;
+  if (!miData[k]) {
+    try {
+      const o = localStorage.getItem('mi_out_'+k);
+      const i = localStorage.getItem('mi_ib_'+k);
+      miData[k] = {
+        out: o ? {...DEFAULT_OUT,...JSON.parse(o)} : {...DEFAULT_OUT},
+        ib:  i ? {...DEFAULT_IB,...JSON.parse(i)}  : {...DEFAULT_IB},
+      };
+    } catch { miData[k]={out:{...DEFAULT_OUT},ib:{...DEFAULT_IB}}; }
+  }
+  return miData[k];
+}
+
+function setMiOut(updates) {
+  const k = miSdr+'_'+miPeriod;
+  const d = getMiData(miSdr, miPeriod);
+  d.out = {...d.out,...updates};
+  miData[k] = d;
+  renderMiOut();
+}
+function setMiIb(updates) {
+  const k = miSdr+'_'+miPeriod;
+  const d = getMiData(miSdr, miPeriod);
+  d.ib = {...d.ib,...updates};
+  miData[k] = d;
+  renderMiIb();
+}
+
+function saveMiPanel() {
+  const k = miSdr+'_'+miPeriod;
+  const d = getMiData(miSdr, miPeriod);
+  localStorage.setItem('mi_out_'+k, JSON.stringify(d.out));
+  localStorage.setItem('mi_ib_'+k,  JSON.stringify(d.ib));
+  // También guardar en Sheets para compartir
+  apiPost({action:'saveMi', sdr:miSdr, period:miPeriod, out:d.out, ib:d.ib});
+  const btn = document.getElementById('mi-save-btn');
+  const orig = btn.textContent;
+  btn.textContent = '✓ Guardado';
+  btn.style.color = 'var(--green)';
+  setTimeout(()=>{btn.textContent=orig;},2000);
+}
+
+function buildMiPanel() {
+  // SDR buttons
+  document.getElementById('mi-sdr-row').innerHTML = SDRS.map(s=>`
+    <button class="sdr-btn ${s.id===miSdr?'on':''}" onclick="selectMiSdr('${s.id}')" style="${s.id===miSdr?`border-color:${s.color};color:${s.color};background:${s.color}15;`:''}">
+      <div class="sdr-avatar" style="background:${s.color}22;color:${s.color};border:1px solid ${s.color}44;">${s.avatar}</div>
+      ${s.label}
+    </button>`).join('');
+  // Period buttons
+  document.getElementById('mi-period-row').innerHTML = PERIODS.map(p=>`
+    <button class="period-btn ${p.value===miPeriod?'on':''}" onclick="selectMiPeriod('${p.value}')">${p.label}</button>`).join('');
+  updateMiProfile();
+  renderMiOut();
+  renderMiIb();
+  renderMiComp();
+}
+
+function selectMiSdr(id) { miSdr=id; buildMiPanel(); }
+function selectMiPeriod(v) { miPeriod=v; buildMiPanel(); }
+
+function updateMiProfile() {
+  const s = SDRS.find(x=>x.id===miSdr)||SDRS[0];
+  const p = PERIODS.find(x=>x.value===miPeriod)||{label:miPeriod};
+  document.getElementById('mi-avatar').style.cssText = `width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:${s.color}22;border:1.5px solid ${s.color};color:${s.color};`;
+  document.getElementById('mi-avatar').textContent = s.avatar;
+  document.getElementById('mi-name').textContent = s.label;
+  document.getElementById('mi-sub').textContent = s.role + ' · ' + p.label;
+}
+
+function editable(val, onChange, prefix='', suffix='', big=true) {
+  const id = 'ed_'+Math.random().toString(36).slice(2);
+  const fs = big ? '24px' : '13px';
+  const fw = big ? '800' : '400';
+  setTimeout(()=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', ()=>{
+      const inp = document.createElement('input');
+      inp.type='number'; inp.value=val;
+      inp.style.cssText=`background:var(--s1);border:1px solid var(--muted);border-radius:5px;color:var(--text);font-family:'Syne',sans-serif;font-size:${fs};font-weight:${fw};width:${big?90:60}px;padding:2px 6px;outline:none;`;
+      el.replaceWith(inp);
+      inp.focus(); inp.select();
+      const commit = ()=>{ const v=parseFloat(inp.value); onChange(isNaN(v)?0:v); };
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('keydown', e=>{ if(e.key==='Enter') commit(); if(e.key==='Escape') { const span=document.createElement('span'); span.id=id; span.innerHTML=`${prefix}${fmt(val)}${suffix?`<span style="font-size:${parseInt(fs)*0.55}px;color:var(--muted);margin-left:2px;">${suffix}</span>`:''}`;span.className='editable';span.style.cssText=`cursor:text;font-family:'Syne',sans-serif;font-size:${fs};font-weight:${fw};color:var(--text);border-bottom:1px dashed var(--border2);padding-bottom:1px;display:inline-block;`; inp.replaceWith(span); }});
+    });
+  },10);
+  return `<span id="${id}" class="editable" style="font-family:'Syne',sans-serif;font-size:${fs};font-weight:${fw};color:var(--text);">${prefix}${fmt(val)}${suffix?`<span style="font-size:${parseInt(fs)*0.55}px;color:var(--muted);margin-left:2px;">${suffix}</span>`:''}</span>`;
+}
+
+function progBar(val,goal,color){
+  const p=goal?Math.min(100,Math.round(val/goal*100)):0;
+  const c=p>=100?'#34D399':p>=60?color:'#F87171';
+  return `<div style="margin-top:5px;"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px;"><span>meta ${fmt(goal)}</span><span style="color:${c};font-weight:600;">${p}%</span></div><div class="prog-bg"><div class="prog-bar" style="width:${p}%;background:${c};"></div></div></div>`;
+}
+
+function mCard(label, icon, val, onChange, goal, onGoalChange, color, prefix=''){
+  const s = SDRS.find(x=>x.id===miSdr)||{color:'#34D399'};
+  return `<div class="mcard">
+    <div class="mcard-lbl"><span>${icon}</span>${label}</div>
+    ${editable(val, onChange, prefix)}
+    ${goal!==undefined ? progBar(val,goal,color||s.color) : ''}
+    ${onGoalChange ? `<div style="font-size:10px;color:var(--muted2);display:flex;gap:4px;align-items:center;margin-top:3px;">meta: ${editable(goal,onGoalChange,'','',false)}</div>` : ''}
+  </div>`;
+}
+
+function renderMiOut() {
+  const {out} = getMiData(miSdr,miPeriod);
+  const s = SDRS.find(x=>x.id===miSdr)||{color:'#34D399'};
+  const c = s.color;
+  const totalComp=(out.pe_comp||0)+(out.mx_comp||0)+(out.es_comp||0);
+  const totalPipe=(out.pe_pipe||0)+(out.mx_pipe||0)+(out.es_pipe||0);
+  const noshow=out.m_sch>0?Math.round(((out.m_sch-out.m_done)/out.m_sch)*100):null;
+  const conv=((out.calls||0)+(out.emails||0)+(out.linkedin||0))>0?(out.m_sch/((out.calls||0)+(out.emails||0)+(out.linkedin||0))*100).toFixed(1):null;
+
+  document.getElementById('mi-out').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:1.5rem;">
+    <div>
+      <div class="stitle">📡 Actividad de prospección</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+        ${mCard('Llamadas','📞',out.calls||0,v=>setMiOut({calls:v}),out.g_calls,v=>setMiOut({g_calls:v}),c)}
+        ${mCard('Emails','✉️',out.emails||0,v=>setMiOut({emails:v}),out.g_emails,v=>setMiOut({g_emails:v}),c)}
+        ${mCard('LinkedIn','💼',out.linkedin||0,v=>setMiOut({linkedin:v}),out.g_linkedin,v=>setMiOut({g_linkedin:v}),c)}
+      </div>
+    </div>
+    <div>
+      <div class="stitle">🌎 Pipeline por país</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mcard"><div class="mcard-lbl">🇵🇪 Perú</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+            <div><div style="font-size:10px;color:var(--muted2);">empresas</div>${editable(out.pe_comp||0,v=>setMiOut({pe_comp:v}))}</div>
+            <div><div style="font-size:10px;color:var(--muted2);">pipeline</div>${editable(out.pe_pipe||0,v=>setMiOut({pe_pipe:v}),'$')}</div>
+          </div></div>
+        <div class="mcard"><div class="mcard-lbl">🇲🇽 México</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+            <div><div style="font-size:10px;color:var(--muted2);">empresas</div>${editable(out.mx_comp||0,v=>setMiOut({mx_comp:v}))}</div>
+            <div><div style="font-size:10px;color:var(--muted2);">pipeline</div>${editable(out.mx_pipe||0,v=>setMiOut({mx_pipe:v}),'$')}</div>
+          </div></div>
+        <div class="mcard"><div class="mcard-lbl">🇪🇸 España</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+            <div><div style="font-size:10px;color:var(--muted2);">empresas</div>${editable(out.es_comp||0,v=>setMiOut({es_comp:v}))}</div>
+            <div><div style="font-size:10px;color:var(--muted2);">pipeline</div>${editable(out.es_pipe||0,v=>setMiOut({es_pipe:v}),'$')}</div>
+          </div></div>
+        <div class="mcard" style="background:var(--s1);">
+          <div class="mcard-lbl">TOTAL</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">${fmt(totalComp)} empresas</div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green);">$${fmt(totalPipe)}</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="stitle">📅 Reuniones</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        ${mCard('Agendadas','📌',out.m_sch||0,v=>setMiOut({m_sch:v}),out.g_m_sch,v=>setMiOut({g_m_sch:v}),c)}
+        ${mCard('Realizadas','✅',out.m_done||0,v=>setMiOut({m_done:v}),out.g_m_done,v=>setMiOut({g_m_done:v}),c)}
+      </div>
+    </div>
+    <div>
+      <div class="stitle">📊 Indicadores calculados</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">No-show</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:${noshow!==null?(noshow>25?'#F87171':'#34D399'):'var(--muted)'};">${noshow!==null?noshow+'%':'—'}</div></div>
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Conversión</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#60A5FA;">${conv!==null?conv+'%':'—'}</div></div>
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Pipeline total</div><div style="font-size:18px;font-weight:800;font-family:'Syne',sans-serif;color:#34D399;">${totalPipe>0?'$'+fmt(totalPipe):'—'}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderMiIb() {
+  const {ib} = getMiData(miSdr,miPeriod);
+  const s = SDRS.find(x=>x.id===miSdr)||{color:'#34D399'};
+  const c = s.color;
+  const contactRate = ib.leads>0?Math.round(ib.contacted/ib.leads*100):null;
+  const convRate    = ib.leads>0?(ib.meetings/ib.leads*100).toFixed(1):null;
+
+  document.getElementById('mi-ib').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:1.5rem;">
+    <div>
+      <div class="stitle">📥 Gestión de leads</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+        ${mCard('Leads recibidos','👤',ib.leads||0,v=>setMiIb({leads:v}),ib.g_leads,v=>setMiIb({g_leads:v}),c)}
+        ${mCard('Contactados','💬',ib.contacted||0,v=>setMiIb({contacted:v}),ib.g_contacted,v=>setMiIb({g_contacted:v}),c)}
+        ${mCard('Reuniones','📅',ib.meetings||0,v=>setMiIb({meetings:v}),ib.g_meetings,v=>setMiIb({g_meetings:v}),c)}
+        ${mCard('Reciprocidad','🔄',ib.recip||0,v=>setMiIb({recip:v}),undefined,undefined,c)}
+        ${mCard('Pipeline USD','💰',ib.pipeline||0,v=>setMiIb({pipeline:v}),ib.g_pipeline,v=>setMiIb({g_pipeline:v}),c,'$')}
+      </div>
+    </div>
+    <div>
+      <div class="stitle">📊 Indicadores calculados</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Tasa de contacto</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#60A5FA;">${contactRate!==null?contactRate+'%':'—'}</div></div>
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Lead → reunión</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#34D399;">${convRate!==null?convRate+'%':'—'}</div></div>
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Pipeline / lead</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#C084FC;">${ib.leads>0?'$'+fmt(Math.round(ib.pipeline/ib.leads)):'—'}</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderMiComp() {
+  const now = new Date();
+  const allData = SDRS.map(sdr => {
+    const d = getMiData(sdr.id, miPeriod);
+    const totalPipe=(d.out.pe_pipe||0)+(d.out.mx_pipe||0)+(d.out.es_pipe||0)+(d.ib.pipeline||0);
+    const noshow=d.out.m_sch>0?Math.round(((d.out.m_sch-d.out.m_done)/d.out.m_sch)*100):0;
+    return {...sdr, calls:d.out.calls||0, emails:d.out.emails||0, linkedin:d.out.linkedin||0,
+      m_sch:d.out.m_sch||0, m_done:d.out.m_done||0, ib_meetings:d.ib.meetings||0,
+      noshow, totalPipe};
+  });
+  const period = PERIODS.find(p=>p.value===miPeriod)||{label:miPeriod};
+  document.getElementById('mi-comp').innerHTML = `
+    <div class="stitle">📋 Comparativa — ${period.label}</div>
+    <div class="twrap"><table><thead><tr>
+      <th>SDR</th><th>Llamadas</th><th>Emails</th><th>LinkedIn</th>
+      <th>Reun. out.</th><th>Reun. ib.</th><th>No-show</th><th>Pipeline</th>
+    </tr></thead><tbody>
+    ${allData.map(d=>`<tr>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:26px;height:26px;border-radius:50%;background:${d.color}22;border:1px solid ${d.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${d.color};">${d.avatar}</div>
+        <span style="font-weight:500;">${d.label}</span></div></td>
+      <td style="color:var(--muted);">${d.calls}</td>
+      <td style="color:var(--muted);">${d.emails}</td>
+      <td style="color:var(--muted);">${d.linkedin}</td>
+      <td style="font-weight:500;">${d.m_sch}</td>
+      <td style="font-weight:500;">${d.ib_meetings}</td>
+      <td style="color:${d.noshow>25?'#F87171':'#34D399'};font-weight:500;">${d.noshow}%</td>
+      <td style="color:#34D399;font-weight:500;">${d.totalPipe>0?'$'+fmt(d.totalPipe):'—'}</td>
+    </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+function miTab(t) {
+  document.querySelectorAll('.itab').forEach((b,i)=>b.classList.toggle('on',['out','ib','comp'][i]===t));
+  ['mi-out','mi-ib','mi-comp'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('mi-'+t).style.display='';
+  if(t==='comp') renderMiComp();
+}
+
+// ─── REGISTRAR ───────────────────────────────────────────────
+async function guardar() {
+  const btn = document.getElementById('btn-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const rec = {
+    id: Date.now(),
+    fecha: document.getElementById('f-fecha').value,
+    sdr:   document.getElementById('f-sdr').value,
+    pais:  document.getElementById('f-pais').value,
+    canal: document.getElementById('f-canal').value,
+    contactados: parseInt(document.getElementById('f-cont').value)||0,
+    respuestas:  parseInt(document.getElementById('f-resp').value)||0,
+    positivas:   parseInt(document.getElementById('f-pos').value)||0,
+    reuniones:   parseInt(document.getElementById('f-reus').value)||0,
+    notas: document.getElementById('f-notas').value,
+  };
+  if (!rec.fecha) { alert('Seleccioná la fecha'); btn.disabled=false; btn.textContent='Guardar registro'; return; }
+  records.push(rec);
+  await apiPost({action:'add', record:rec});
+  const al = document.getElementById('reg-ok');
+  al.textContent='✅ Registro guardado. Visible para todo el equipo.';
+  al.className='alert ok show';
+  setTimeout(()=>al.classList.remove('show'),5000);
+  ['f-cont','f-resp','f-pos','f-reus'].forEach(id=>document.getElementById(id).value=0);
+  document.getElementById('f-notas').value='';
+  btn.disabled=false; btn.textContent='Guardar registro';
+  renderDash(); renderHist(); renderRanking();
+}
+
+// ─── HISTORIAL ───────────────────────────────────────────────
+function renderHist() {
+  const sdrF  = document.getElementById('h-sdr').value;
+  const paisF = document.getElementById('h-pais').value;
+  const recs  = filtered(sdrF, paisF, 'all').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if (!recs.length) {
+    document.getElementById('h-tbl').innerHTML='<tr class="empty-row"><td colspan="10">Sin registros todavía</td></tr>';
+    return;
+  }
+  document.getElementById('h-tbl').innerHTML = recs.map(r => {
+    const rate = r.contactados ? Math.round(r.respuestas/r.contactados*100) : 0;
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${r.fecha||'—'}</td>
+      <td><strong>${r.sdr||'—'}</strong></td>
+      <td>${flag(r.pais)} ${paisLabel(r.pais)}</td>
+      <td><span class="pill pb">${r.canal||'—'}</span></td>
+      <td>${n(r.contactados)}</td><td>${n(r.respuestas)}</td>
+      <td>${n(r.positivas)}</td><td><strong>${n(r.reuniones)}</strong></td>
+      <td><span class="pill ${pillClass(rate)}">${rate}%</span></td>
+      <td style="color:var(--muted);font-size:11px;">${r.notas||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── REUNIONES ───────────────────────────────────────────────
+function filteredReus() {
+  const sdrF   = document.getElementById('re-sdr').value;
+  const paisF  = document.getElementById('re-pais').value;
+  const mesF   = document.getElementById('re-mes').value;
+  const estF   = document.getElementById('re-estado').value;
+  return getAllReus().filter(r => {
+    if (sdrF!=='all' && r.sdr!==sdrF) return false;
+    if (paisF!=='all' && r.pais!==paisF) return false;
+    if (mesF!=='all' && r.mes!==parseInt(mesF)) return false;
+    if (estF==='WON' && r.estado!=='WON') return false;
+    if (estF==='LOST' && r.estado!=='LOST') return false;
+    if (estF==='HOT' && r.estado!=='HOT') return false;
+    if (estF==='SI' && r.cotizacion!=='SI') return false;
+    if (estF==='NO' && r.cotizacion!=='NO') return false;
+    return true;
+  });
+}
+
+function renderReus() {
+  const recs = filteredReus();
+  const total   = recs.length;
+  const conProp = recs.filter(r=>r.cotizacion==='SI').length;
+  const won     = recs.filter(r=>r.estado==='WON').length;
+  const lost    = recs.filter(r=>r.estado==='LOST').length;
+  const hot     = recs.filter(r=>r.estado==='HOT').length;
+  const pipe    = recs.reduce((a,r)=>a+(r.monto||0),0);
+  const conv    = total ? Math.round(conProp/total*100) : 0;
+
+  document.getElementById('re-cards').innerHTML = `
+    <div class="card b"><div class="card-lbl">Total reuniones</div><div class="card-val">${total}</div><div class="card-sub">${recs.filter(r=>r.realizada==='SI').length} realizadas</div></div>
+    <div class="card g"><div class="card-lbl">Con propuesta</div><div class="card-val">${conProp}</div><div class="card-sub">conversión ${conv}%</div></div>
+    <div class="card g"><div class="card-lbl">WON 🏆</div><div class="card-val">${won}</div><div class="card-sub">${lost} LOST · ${hot} HOT</div></div>
+    <div class="card a"><div class="card-lbl">Pipeline total</div><div class="card-val">$${Math.round(pipe/1000)}k</div><div class="card-sub">USD estimado</div></div>`;
+
+  const paisLabels = {PERU:'🇵🇪 Perú',MEXICO:'🇲🇽 México',ESPANA:'🇪🇸 España'};
+  const estadoPill = (e,c,m) => {
+    if(e==='WON') return `<span class="pill pg">WON 🏆</span>`;
+    if(e==='LOST') return `<span class="pill pr">LOST</span>`;
+    if(e==='HOT') return `<span class="pill pa">HOT 🔥</span>`;
+    if(e==='PENDIENTE'||e==='TODAVIA') return `<span class="pill pa">Pendiente</span>`;
+    if(c==='SI'&&m>0) return `<span class="pill pb">Con prop.</span>`;
+    return `<span class="pill pn">Sin prop.</span>`;
+  };
+
+  document.getElementById('re-tbl').innerHTML = recs.map(r=>`
+    <tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
+      <td><strong>${r.sdr}</strong></td>
+      <td>${r.empresa}</td>
+      <td>${paisLabels[r.pais]||r.pais}</td>
+      <td><span class="pill pb">${r.canal}</span></td>
+      <td>${r._id ? `<select onchange="editReu('${r._id}','realizada',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="SI" ${r.realizada==='SI'?'selected':''}>Sí</option><option value="NO" ${r.realizada!=='SI'?'selected':''}>No</option></select>` : (r.realizada==='SI'?'<span class="pill pg">Sí</span>':'<span class="pill pr">No</span>')}</td>
+      <td>${r._id ? `<select onchange="editReu('${r._id}','cotizacion',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="SI" ${r.cotizacion==='SI'?'selected':''}>Sí</option><option value="NO" ${r.cotizacion!=='SI'?'selected':''}>No</option></select>` : (r.cotizacion==='SI'?'<span class="pill pg">Sí</span>':'<span class="pill pn">No</span>')}</td>
+      <td>${r._id ? `<select onchange="editReu('${r._id}','estado',this.value)" style="background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;"><option value="" ${!r.estado?'selected':''}>En proceso</option><option value="HOT" ${r.estado==='HOT'?'selected':''}>HOT 🔥</option><option value="WON" ${r.estado==='WON'?'selected':''}>WON 🏆</option><option value="LOST" ${r.estado==='LOST'?'selected':''}>LOST</option></select>` : estadoPill(r.estado,r.cotizacion,r.monto)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:${r.monto>0?'#34D399':'var(--muted)'};">${r._id ? `<span contenteditable="true" onblur="editReu('${r._id}','monto',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">$${r.monto||0}</span>` : (r.monto>0?'$'+fmt(r.monto):'—')}</td>
+    </tr>`).join('')||'<tr class="empty-row"><td colspan="9">Sin reuniones para este filtro</td></tr>';
+}
+
+// ─── RANKING ─────────────────────────────────────────────────
+function renderRanking() {
+  const now = new Date();
+  const stats = ['Leandro','Grace','Carmen'].map(sdr => {
+    const monthRecs = records.filter(r=>{
+      const d=new Date(r.fecha);
+      return r.sdr===sdr && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
+    });
+    const s = agg(monthRecs);
+    const rate = s.contactados ? Math.round(s.respuestas/s.contactados*100) : 0;
+    const conv = s.respuestas  ? Math.round(s.reuniones/s.respuestas*100) : 0;
+    return {...s, sdr, rate, conv};
+  }).sort((a,b)=>b.reuniones-a.reuniones);
+
+  document.getElementById('rank-cards').innerHTML = stats.map((s,i)=>`
+    <div class="rcard ${i===0?'first':''}">
+      <div class="rcard-pos">${['Líder del mes','2° lugar','3° lugar','4° lugar'][i]}</div>
+      <div class="rcard-name">${s.sdr}</div>
+      <div class="rcard-val">${s.reuniones}</div>
+      <div class="rcard-sub">reuniones · ${s.contactados.toLocaleString()} contactados</div>
+    </div>`).join('');
+
+  document.getElementById('rank-tbl').innerHTML = stats.map((s,i)=>{
+    const sdrInfo = SDRS.find(x=>x.label===s.sdr)||{color:'#6B7280',avatar:s.sdr.slice(0,2).toUpperCase()};
+    return `<tr>
+      <td><strong>${i+1}</strong></td>
+      <td><div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${sdrInfo.color};">${sdrInfo.avatar}</div>
+        <strong>${s.sdr}</strong></div></td>
+      <td>${s.contactados.toLocaleString()}</td>
+      <td><strong style="color:#34D399;">${s.reuniones}</strong></td>
+      <td><span class="pill ${s.conv>=1?'pg':'pa'}">${s.conv}%</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── EXPORT ──────────────────────────────────────────────────
+function exportCSV() {
+  const sdrF  = document.getElementById('h-sdr').value;
+  const paisF = document.getElementById('h-pais').value;
+  const recs  = filtered(sdrF, paisF, 'all').sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const header='Fecha,SDR,País,Canal,Contactados,Respuestas,Positivas,Reuniones,Notas';
+  const rows = recs.map(r=>`${r.fecha},${r.sdr},${r.pais},${r.canal},${n(r.contactados)},${n(r.respuestas)},${n(r.positivas)},${n(r.reuniones)},"${(r.notas||'').replace(/"/g,'""')}"`);
+  const a = Object.assign(document.createElement('a'),{href:'data:text/csv;charset=utf-8,'+encodeURIComponent([header,...rows].join('\n')),download:`ebombo_sdr_${new Date().toISOString().split('T')[0]}.csv`});
+  a.click();
+}
+
+function exportReporte(period) {
+  const now   = new Date();
+  const recs  = records.filter(r=>{
+    if(!r.fecha) return false;
+    if(period==='week'){return (now-new Date(r.fecha))/86400000<=7;}
+    const d=new Date(r.fecha);
+    return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+  }).map(normalizeRecord).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+
+  const label = period==='week'?'Semana':'Mes';
+  const total = recs.reduce((a,r)=>({contactados:a.contactados+n(r.contactados),respuestas:a.respuestas+n(r.respuestas),positivas:a.positivas+n(r.positivas),reuniones:a.reuniones+n(r.reuniones)}),{contactados:0,respuestas:0,positivas:0,reuniones:0});
+  const tR = total.contactados?Math.round(total.respuestas/total.contactados*100):0;
+
+  const rStats = {total:getAllReus().length, conProp:getAllReus().filter(r=>r.cotizacion==='SI').length, won:getAllReus().filter(r=>r.estado==='WON').length, lost:getAllReus().filter(r=>r.estado==='LOST').length, pipeline:getAllReus().reduce((a,r)=>a+(r.monto||0),0)};
+
+  let html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte ${label} SDR — eBombo</title>
+  <style>body{font-family:Arial,sans-serif;font-size:13px;color:#1A1916;padding:2rem;max-width:900px;margin:0 auto;}
+  h1{font-size:22px;font-weight:700;margin-bottom:4px;}
+  .sub{color:#7A7870;font-size:13px;margin-bottom:2rem;}
+  h2{font-size:15px;font-weight:600;margin:1.5rem 0 .75rem;border-bottom:1px solid #E2E0D8;padding-bottom:6px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px;}
+  th{background:#F0EFE9;padding:7px 10px;text-align:left;font-weight:600;border:1px solid #E2E0D8;}
+  td{padding:7px 10px;border:1px solid #E2E0D8;}tr:nth-child(even) td{background:#F7F6F2;}
+  .g{color:#1A6B4A;font-weight:600;}.r{color:#8B2020;}.footer{margin-top:2rem;font-size:11px;color:#7A7870;border-top:1px solid #E2E0D8;padding-top:1rem;}
+  @media print{body{padding:1rem;}}</style></head><body>
+  <h1>Reporte ${label} — eBombo SDR</h1>
+  <div class="sub">Generado el ${now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+  <h2>Resumen global</h2>
+  <table><tr><th>Métrica</th><th>Valor</th></tr>
+  <tr><td>Contactados</td><td class="g">${total.contactados.toLocaleString()}</td></tr>
+  <tr><td>Respuestas</td><td>${total.respuestas} (${tR}%)</td></tr>
+  <tr><td>Positivas</td><td class="g">${total.positivas}</td></tr>
+  <tr><td>Reuniones</td><td class="g">${total.reuniones}</td></tr></table>
+  <h2>Reuniones históricas</h2>
+  <table><tr><th>Total</th><th>Con propuesta</th><th>WON</th><th>LOST</th><th>Pipeline USD</th></tr>
+  <tr><td>${rStats.total}</td><td class="g">${rStats.conProp}</td><td class="g">${rStats.won}</td><td class="r">${rStats.lost}</td><td class="g">$${rStats.pipeline.toLocaleString()}</td></tr></table>
+  <h2>Top oportunidades ($5K+)</h2>
+  <table><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Estado</th><th>Monto</th></tr>
+  ${getAllReus().filter(r=>r.monto>5000).sort((a,b)=>b.monto-a.monto).slice(0,15).map(r=>`<tr><td>${r.sdr}</td><td>${r.empresa}</td><td>${r.pais}</td><td>${r.estado||'—'}</td><td class="g">$${r.monto.toLocaleString()}</td></tr>`).join('')}
+  </table>
+  <div class="footer">Reporte generado por Panel SDR eBombo · ${now.toISOString()}</div></body></html>`;
+
+  const a = Object.assign(document.createElement('a'),{href:'data:text/html;charset=utf-8,'+encodeURIComponent(html),download:`reporte_${period}_${now.toISOString().split('T')[0]}.html`});
+  a.click();
+}
+
+// ─── NAV ─────────────────────────────────────────────────────
+function go(t) {
+  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('on',['dash','mi','reg','hist','reus','rank'][i]===t));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.getElementById('sec-'+t).classList.add('on');
+  if(t==='dash') renderDash();
+  if(t==='hist') renderHist();
+  if(t==='rank') renderRanking();
+  if(t==='reus') renderReus();
+  if(t==='camps') renderCamps();
+}
+
+
+
+// ─── REUNIONES EXTRAS ────────────────────────────────────────
+let reusExtras = [];
+try { reusExtras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]'); } catch(e) {}
+
+function getAllReus() { return REUNIONES_DATA.concat(reusExtras); }
+
+function showAddReu() {
+  const f = document.getElementById('reu-form');
+  f.style.display = f.style.display==='none'?'block':'none';
+}
+
+function addReu() {
+  const now = new Date();
+  const r = {
+    mes:       now.getMonth()+1,
+    semana:    Math.ceil(now.getDate()/7),
+    sdr:       document.getElementById('nr-sdr').value,
+    empresa:   document.getElementById('nr-empresa').value,
+    realizada: document.getElementById('nr-realizada').value,
+    pais:      document.getElementById('nr-pais').value,
+    canal:     document.getElementById('nr-canal').value,
+    cotizacion:document.getElementById('nr-cot').value,
+    estado:    document.getElementById('nr-estado').value,
+    monto:     parseInt(document.getElementById('nr-monto').value)||0,
+    _id:       'reu_'+Date.now(),
+  };
+  if (!r.empresa) { alert('Ingresá el nombre de la empresa'); return; }
+  reusExtras.push(r);
+  localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+  apiPost({action:'addReu', reu:r});
+  document.getElementById('reu-form').style.display='none';
+  document.getElementById('nr-empresa').value='';
+  document.getElementById('nr-monto').value=0;
+  renderReus();
+}
+
+function editReu(id, field, val) {
+  const r = reusExtras.find(x=>x._id===id);
+  if (!r) return;
+  r[field] = field==='monto' ? parseInt(val)||0 : val;
+  localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+  apiPost({action:'addReu', reu:r});
+}
+
+// ─── CAMPAÑAS ────────────────────────────────────────────────
+let campsData = JSON.parse(JSON.stringify([{"id": "ESP_GRACE_012", "sdr": "Grace", "pais": "España", "fecha": "16/3/2026", "nombre": "ESP_GRACE_012_Fiesta Fin de año 2026_Grace", "contactos": 126}, {"id": "ESP_GRACE_006", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_006_Marketing", "contactos": 161}, {"id": "ESP_GRACE_005", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_005_Compras - GENERAL", "contactos": 0}, {"id": "ESP_GRACE_004", "sdr": "Grace", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_Eventos 2026- RRHH.es", "contactos": 174}, {"id": "ESP_GRACE_009", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_009_Catering Corporativo", "contactos": 0}, {"id": "ESP_GRACE_008", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_008_Empresa de decoración de eventos", "contactos": 0}, {"id": "ESP_GRACE_004b", "sdr": "Grace", "pais": "España", "fecha": "21/1/2026", "nombre": "ESP_GRACE_004_ Eventos 2026- RRHH- GRACE", "contactos": 182}, {"id": "ESP_GRACE_003", "sdr": "Grace", "pais": "España", "fecha": "16/1/2026", "nombre": "ESP_GRACE_003_ Aniversarios 2026 - Grace", "contactos": 0}, {"id": "ESP_GRACE_001", "sdr": "Grace", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_GRACE_001_RRHH - Teambuilding", "contactos": 138}, {"id": "MEX_GRACE_002", "sdr": "Grace", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "MEX_GRACE_005", "sdr": "Grace", "pais": "México", "fecha": "17/11/2025", "nombre": "MEX_GRACE_005_Marketing - GENERAL", "contactos": 173}, {"id": "MEX_GRACE_006", "sdr": "Grace", "pais": "México", "fecha": "4/12/2025", "nombre": "MEX_GRACE_006_RRHH - Teambuilding", "contactos": 229}, {"id": "MEX_GRACE_007", "sdr": "Grace", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_GRACE_007_Eventos 2026 - Grace", "contactos": 0}, {"id": "MEX_GRACE_008", "sdr": "Grace", "pais": "México", "fecha": "29/1/2026", "nombre": "MEX_GRACE_008_Día de la mujer - Grace", "contactos": 0}, {"id": "MEX_GRACE_010", "sdr": "Grace", "pais": "México", "fecha": "3/3/2026", "nombre": "MEX_GRACE_010_Empresa de decoración de eventos", "contactos": 0}, {"id": "MEX_GRACE_011", "sdr": "Grace", "pais": "México", "fecha": "23/3/2026", "nombre": "MEX_GRACE_011_Campaña Fin de año 2026", "contactos": 175}, {"id": "MEX_GRACE_012", "sdr": "Grace", "pais": "México", "fecha": "22/4/2026", "nombre": "MEX_GRACE_012_Pride", "contactos": 193}, {"id": "PERU_GRACE_002", "sdr": "Grace", "pais": "Perú", "fecha": "26/11/2025", "nombre": "PERU_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "PERU_GRACE_005", "sdr": "Grace", "pais": "Perú", "fecha": "4/12/2025", "nombre": "PERU_GRACE_005_RRHH - Teambuilding", "contactos": 151}, {"id": "PERU_GRACE_007", "sdr": "Grace", "pais": "Perú", "fecha": "2/1/2026", "nombre": "PERU_GRACE_007_Eventos 2026", "contactos": 156}, {"id": "PERU_GRACE_08", "sdr": "Grace", "pais": "Perú", "fecha": "20/1/2026", "nombre": "PERU_GRACE_08_Marketing", "contactos": 0}, {"id": "PERU_GRACE_011", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_011_Fiestas Patrias", "contactos": 0}, {"id": "PERU_GRACE_012", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_012_Campaña Fin de año 2026", "contactos": 0}, {"id": "PER_014", "sdr": "Carmen", "pais": "Perú", "fecha": "10/12/2025", "nombre": "PER_014_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "PER_016", "sdr": "Carmen", "pais": "Perú", "fecha": "4/2/2026", "nombre": "PER_016_Eventos 2026 - CARMI", "contactos": 0}, {"id": "PER_042", "sdr": "Carmen", "pais": "Perú", "fecha": "22/4/2026", "nombre": "PER_042_Fiestas Patrias - CARMI", "contactos": 0}, {"id": "PER_018", "sdr": "Carmen", "pais": "Perú", "fecha": "6/2/2026", "nombre": "PER_018_Marketing- CARMI", "contactos": 0}, {"id": "PER_022", "sdr": "Carmen", "pais": "Perú", "fecha": "20/2/2026", "nombre": "PER_022_Día del Trabajo- CARMI", "contactos": 0}, {"id": "PER_032", "sdr": "Carmen", "pais": "Perú", "fecha": "18/3/2026", "nombre": "PER_032_Día de la Madre - Carmi", "contactos": 0}, {"id": "PERU_039", "sdr": "Carmen", "pais": "Perú", "fecha": "25/3/2026", "nombre": "PERU_039_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_017", "sdr": "Carmen", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_017_Eventos 2026 - CARMI", "contactos": 0}, {"id": "MEX_013", "sdr": "Carmen", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_013_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "MEX_011", "sdr": "Carmen", "pais": "México", "fecha": "27/11/2025", "nombre": "MEX_011_ Refered By - MEX GENERAL - Carmi", "contactos": 0}, {"id": "MEX_006", "sdr": "Carmen", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_006_Compras - CARMI", "contactos": 0}, {"id": "MEX_023", "sdr": "Carmen", "pais": "México", "fecha": "20/2/2026", "nombre": "MEX_023_Día del Trabajo - CARMI", "contactos": 0}, {"id": "MEX_024", "sdr": "Carmen", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_024_Día de la Madre - CARMI", "contactos": 0}, {"id": "MEX_028", "sdr": "Carmen", "pais": "México", "fecha": "9/3/2026", "nombre": "MEX_028_ Día de la Familia_ Carmi", "contactos": 0}, {"id": "MEX_040", "sdr": "Carmen", "pais": "México", "fecha": "21/4/2026", "nombre": "MEX_040_Pride - CARMI", "contactos": 0}, {"id": "MEX_036", "sdr": "Carmen", "pais": "México", "fecha": "20/3/2026", "nombre": "MEX_036_Marketing - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_037", "sdr": "Carmen", "pais": "México", "fecha": "24/3/2026", "nombre": "MEX_037_Campaña Fin de año 2026 - Carmi", "contactos": 0}, {"id": "ESP_015", "sdr": "Carmen", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_015_ Aniversarios 2026 - CARMI", "contactos": 0}, {"id": "ESP_019", "sdr": "Carmen", "pais": "España", "fecha": "10/1/1962", "nombre": "ESP_019_ Eventos 2026 - Carmi", "contactos": 0}, {"id": "ESP_020", "sdr": "Carmen", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_020_ Inicio de Año_RH - Carmi", "contactos": 0}, {"id": "ESP_022", "sdr": "Carmen", "pais": "España", "fecha": "19/2/2026", "nombre": "ESP_022_ MKT_ Carmi", "contactos": 0}, {"id": "ESP_026", "sdr": "Carmen", "pais": "España", "fecha": "6/3/2026", "nombre": "ESP_026_ Día del Trabajo_ Carmi", "contactos": 0}, {"id": "ESP_027", "sdr": "Carmen", "pais": "España", "fecha": "9/3/2026", "nombre": "ESP_027_ Summer Party_ Carmi", "contactos": 0}, {"id": "ESP_030", "sdr": "Carmen", "pais": "España", "fecha": "11/3/2026", "nombre": "ESP_030_ Empresa de decoración de eventos_ Carmi", "contactos": 0}, {"id": "ESP_031", "sdr": "Carmen", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_031_ Catering Corporativo_ Carmi", "contactos": 0}, {"id": "ESP_033", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_033_Fiesta Fin de año 2026_Carmi", "contactos": 0}, {"id": "ESP_034", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_034_RRHH - Teambuilding - Carmi", "contactos": 0}, {"id": "ESP-035", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP-035-Día de la madre- CARMI", "contactos": 0}, {"id": "ESP_038", "sdr": "Carmen", "pais": "España", "fecha": "24/3/2026", "nombre": "ESP_038_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "ESP_051", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_051_Campaña activación mundial Grupal", "contactos": 0}, {"id": "ESP_050", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_050_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "ESP_049", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_049_Día de San Isidro - GRUPAL", "contactos": 0}, {"id": "ESP_048", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_048_Día de Madrid- GRUPAL", "contactos": 0}, {"id": "ESP_047", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_047_Día del padre - GRUPAL", "contactos": 0}, {"id": "ESP_046", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_046_Summer Party - GRUPAL", "contactos": 0}, {"id": "ESP_045", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_045_Día de la Familia - GRUPAL", "contactos": 0}, {"id": "ESP_044", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_044_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "ESP_043", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_043_Catering Corporativo - Grupal", "contactos": 0}, {"id": "ESP_042", "sdr": "Grupal", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_042_Día de la mujer - Grupal", "contactos": 0}, {"id": "ESP_041", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_041_Marketing", "contactos": 0}, {"id": "ESP_040", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_040_Aniversarios 2026", "contactos": 0}, {"id": "ESP_039", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_039_RRHH - Team building", "contactos": 0}, {"id": "ESP_036", "sdr": "Grupal", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_036_Eventos 2026- RRHH-CARMI+GRACE", "contactos": 0}, {"id": "ESP_002", "sdr": "Grupal", "pais": "España", "fecha": "24/10/2025", "nombre": "ESP_002_HUBSPOT Antiguos contactos - Inicio de año", "contactos": 0}, {"id": "GLOB_031", "sdr": "Grupal", "pais": "Global", "fecha": "4/12/2025", "nombre": "GLOB_031_ REVENTA_POLLA_RRHH_CARMI+GRACE", "contactos": 0}, {"id": "GLOB_030", "sdr": "Grupal", "pais": "Global", "fecha": "3/12/2025", "nombre": "GLOB_030_ RECONTACTO_POLLA_RRH_CARMI+GRACE", "contactos": 0}, {"id": "Latam_01", "sdr": "Grupal", "pais": "Global", "fecha": "6/5/2026", "nombre": "Latam_01_Campaña de Eventos virtuales - Grupal", "contactos": 358}, {"id": "MEX_048", "sdr": "Grupal", "pais": "México", "fecha": "20/5/2026", "nombre": "MEX_048_Campaña activación mundial Grupal", "contactos": 172}, {"id": "MEX_047", "sdr": "Grupal", "pais": "México", "fecha": "20/4/2026", "nombre": "MEX_047_Campaña de recontacto Negocios Hubspot - Fin de Año - Grupal", "contactos": 0}, {"id": "MEX_046", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_046_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "MEX_044", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_044_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "MEX_043", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_043_ Día de la Familia - GRUPAL", "contactos": 0}, {"id": "MEX_043b", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_043_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "MEX_042", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_042_Catering Corporativo - Grupal", "contactos": 0}, {"id": "MEX_042b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_042_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_041", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_041_ Año nuevo chino - Carmi + Grace", "contactos": 0}, {"id": "MEX_040b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_040_ Día de la mujer - Carmi + Grace", "contactos": 0}, {"id": "PER_MX_037", "sdr": "Grupal", "pais": "México", "fecha": "5/1/2026", "nombre": "PER + MX_037_ GO LOOTZA_ CARMI + GRACE", "contactos": 0}, {"id": "MEX_035", "sdr": "Grupal", "pais": "México", "fecha": "29/12/2025", "nombre": "MEX_035_ Eventos 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_029", "sdr": "Grupal", "pais": "México", "fecha": "2/12/2025", "nombre": "MEX_029_ CAMPAÑA HUBSPOT_INICIO DE AÑO_RRH_CARMI+GRACE", "contactos": 0}, {"id": "MEX_027", "sdr": "Grupal", "pais": "México", "fecha": "22/10/2025", "nombre": "MEX_027_ CARMI | MKT GENERAL - MEX - NUEVOS CONTACTOS", "contactos": 0}, {"id": "MEX_C", "sdr": "Grupal", "pais": "México", "fecha": "27/10/2025", "nombre": "MEX_C - CAMPAÑA INICIO DE AÑO - RRH", "contactos": 0}, {"id": "MEX_030", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_030_ TRANSPORTES- MKT", "contactos": 0}, {"id": "MEX_031", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_031_ TURISMO-OCIO - MKT", "contactos": 0}, {"id": "MEX_033", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_033_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_002", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_002_ TRANSPORTES CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_003", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_003_ TURISMO-OCIO CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_004", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_004_ Retail Verano / Moda & Lifestyle - MKT", "contactos": 0}, {"id": "PER_005", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_005_ Eventos / Activaciones / Marketing - MKT", "contactos": 0}, {"id": "PER_006", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_006_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_007", "sdr": "Grupal", "pais": "Perú", "fecha": "15/1/2026", "nombre": "PER_007_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "PER_008", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_008_Catering Corporativo - Grupal", "contactos": 0}, {"id": "PER_009", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_009_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "PER_010", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_010_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "PER_012", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_ExpoMina 2026_Grupal", "contactos": 0}, {"id": "PER_012b", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "PER_013", "sdr": "Grupal", "pais": "Perú", "fecha": "20/5/2026", "nombre": "PER_013_Campaña Activación mundial - Grupal", "contactos": 0}, {"id": "ESP_001_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_001_LEANDRO_Compras - GENERAL", "contactos": 0}, {"id": "ESP_002_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_002_Marketing - Leandro", "contactos": 248}, {"id": "ESP_003_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_003_ACTIVIDADES PARA RH_Leandro", "contactos": 0}, {"id": "ESP_004_L", "sdr": "Leandro", "pais": "España", "fecha": "7/2/2026", "nombre": "ESP_004_Eventos 2026- RRHH-Leandro", "contactos": 258}, {"id": "ESP_005_L", "sdr": "Leandro", "pais": "España", "fecha": "22/4/2026", "nombre": "ESP_005_Team Building_Leandro", "contactos": 216}, {"id": "PER_001_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_001_ Marketing General - Leandro", "contactos": 0}, {"id": "PER_002_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_002_Eventos 2026 - Leandro", "contactos": 0}, {"id": "PER_003_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_003_MKT", "contactos": 0}, {"id": "PER_004_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_004_Compras_Leandro", "contactos": 0}, {"id": "Recontacto_L", "sdr": "Leandro", "pais": "Perú", "fecha": "29/4/2026", "nombre": "Recontacto_SinRespuesta_Leandro", "contactos": 105}, {"id": "PER_MEX_001", "sdr": "Leandro", "pais": "Perú/México", "fecha": "29/5/2026", "nombre": "PER_MEX_001_Leandro", "contactos": 120}, {"id": "MEX_001_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_001_ Compras - GENERAL - LEANDRO", "contactos": 210}, {"id": "MEX_002_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_002_ Marketing - GENERAL - Leandro", "contactos": 0}, {"id": "MEX_003_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_003_ Aniversarios 2026 - Leandro", "contactos": 0}, {"id": "MEX_004_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_004_ Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_005_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "MEX_005_ Eventos / Activaciones / Marketing - Leandro", "contactos": 0}, {"id": "MEX_006_L", "sdr": "Leandro", "pais": "México", "fecha": "9/2/2026", "nombre": "MEX_006_Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_009_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_009_Pride - Leandro", "contactos": 0}, {"id": "MEX_008_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_008_ Día del Padre_Leandro", "contactos": 0}, {"id": "RRHH_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "RRHH_Actividades RH_Leandro", "contactos": 0}]));
+// Cargar extras de localStorage
+try {
+  const extra = JSON.parse(localStorage.getItem('ebombo_camps_extra')||'[]');
+  campsData = campsData.concat(extra);
+} catch(e) {}
+
+function showAddCamp() {
+  const f = document.getElementById('c-form');
+  f.style.display = f.style.display==='none'?'block':'none';
+  document.getElementById('nc-fecha').value = new Date().toISOString().split('T')[0];
+}
+
+function addCamp() {
+  const c = {
+    id: 'custom_'+Date.now(),
+    sdr:  document.getElementById('nc-sdr').value,
+    pais: document.getElementById('nc-pais').value,
+    fecha: document.getElementById('nc-fecha').value,
+    nombre: document.getElementById('nc-nombre').value,
+    contactos: parseInt(document.getElementById('nc-cont').value)||0,
+    respuestas: parseInt(document.getElementById('nc-resp').value)||0,
+    reuniones: parseInt(document.getElementById('nc-reus').value)||0,
+  };
+  if (!c.nombre) { alert('Ingresá el nombre de la campaña'); return; }
+  campsData.push(c);
+  // Guardar extras en localStorage
+  const extras = campsData.filter(x=>x.id.startsWith('custom_'));
+  localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
+  // También enviar a Sheets
+  apiPost({action:'addCamp', camp:c});
+  document.getElementById('c-form').style.display='none';
+  document.getElementById('nc-nombre').value='';
+  ['nc-cont','nc-resp','nc-reus'].forEach(id=>document.getElementById(id).value=0);
+  renderCamps();
+}
+
+function editCampField(id, field, val) {
+  const c = campsData.find(x=>x.id===id);
+  if (!c) return;
+  const v = field==='contactos'||field==='respuestas'||field==='reuniones' ? parseInt(val)||0 : val;
+  c[field] = v;
+  const extras = campsData.filter(x=>x.id.startsWith('custom_'));
+  localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
+  apiPost({action:'addCamp', camp:c});
+}
+
+function renderCamps() {
+  const sdrF  = document.getElementById('c-sdr').value;
+  const paisF = document.getElementById('c-pais').value;
+  const recs  = campsData.filter(c=>{
+    if(sdrF!=='all'&&c.sdr!==sdrF) return false;
+    if(paisF!=='all'&&c.pais!==paisF) return false;
+    return true;
+  });
+
+  // Cards resumen
+  const totalCont = recs.reduce((a,c)=>a+(c.contactos||0),0);
+  const totalResp = recs.reduce((a,c)=>a+(c.respuestas||0),0);
+  const totalReus = recs.reduce((a,c)=>a+(c.reuniones||0),0);
+  const tasa = totalCont?Math.round(totalResp/totalCont*100):0;
+  document.getElementById('c-cards').innerHTML = `
+    <div class="card b"><div class="card-lbl">Campañas</div><div class="card-val">${recs.length}</div><div class="card-sub">total</div></div>
+    <div class="card b"><div class="card-lbl">Contactos totales</div><div class="card-val">${totalCont.toLocaleString()}</div><div class="card-sub">enviados</div></div>
+    <div class="card g"><div class="card-lbl">Respuestas</div><div class="card-val">${totalResp}</div><div class="card-sub">tasa ${tasa}%</div></div>
+    <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${totalReus}</div><div class="card-sub">generadas</div></div>`;
+
+  // Tabla
+  const sorted = recs.sort((a,b)=>{
+    const fa=a.fecha||'', fb=b.fecha||'';
+    return fb.localeCompare(fa);
+  });
+
+  document.getElementById('c-tbl').innerHTML = sorted.map(c=>{
+    const sdrInfo = SDRS.find(x=>x.label===c.sdr)||{color:'#6B7280',avatar:(c.sdr||'??').slice(0,2).toUpperCase()};
+    const tasa = c.contactos?Math.round((c.respuestas||0)/c.contactos*100):0;
+    const isCustom = c.id.startsWith('custom_');
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:6px;">
+        <div style="width:22px;height:22px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${sdrInfo.color};">${sdrInfo.avatar||c.sdr.slice(0,2)}</div>
+        ${c.sdr}</div></td>
+      <td>${c.pais||'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.fecha||'—'}</td>
+      <td style="max-width:220px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${c.nombre}">${c.nombre}</td>
+      <td><span contenteditable="true" onblur="editCampField('${c.id}','contactos',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.contactos||0}</span></td>
+      <td><span contenteditable="true" onblur="editCampField('${c.id}','respuestas',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.respuestas||0}</span></td>
+      <td><span contenteditable="true" onblur="editCampField('${c.id}','reuniones',this.textContent)" style="cursor:text;border-bottom:1px dashed var(--border2);padding:1px 3px;">${c.reuniones||0}</span></td>
+      <td><span class="pill ${tasa>=5?'pg':tasa>=2?'pa':'pr'}">${tasa}%</span></td>
+      <td>${isCustom?`<button class="btn-sm" onclick="deleteCamp('${c.id}')" style="color:var(--red);border-color:var(--red);font-size:10px;padding:2px 8px;">✕</button>`:'—'}</td>
+    </tr>`;
+  }).join('')||'<tr class="empty-row"><td colspan="9">Sin campañas para este filtro</td></tr>';
+}
+
+function deleteCamp(id) {
+  campsData = campsData.filter(c=>c.id!==id);
+  const extras = campsData.filter(x=>x.id.startsWith('custom_'));
+  localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
+  renderCamps();
+}
+
+// ─── START ───────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
