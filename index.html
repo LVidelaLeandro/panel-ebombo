@@ -754,7 +754,6 @@ function renderChart(recs) {
     type:'bar',
     data:{labels, datasets:[
       {label:'Contactados', data:sdrNames.map(s=>bySDR[s].c),  backgroundColor:sdrNames.map(s=>sdrColors[s]+'30'), borderColor:sdrNames.map(s=>sdrColors[s]), borderWidth:1.5},
-      {label:'Respuestas',  data:sdrNames.map(s=>bySDR[s].re), backgroundColor:'#FBBF2430', borderColor:'#FBBF24', borderWidth:1.5},
       {label:'Reuniones',   data:sdrNames.map(s=>bySDR[s].ru), backgroundColor:'#34D39940', borderColor:'#34D399', borderWidth:1.5},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
