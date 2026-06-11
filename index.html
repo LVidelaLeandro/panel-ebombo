@@ -223,7 +223,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="stitle">👥 Por SDR</div>
   <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
   <div class="stitle">🌎 Por país</div>
-  <div class="twrap"><table><thead><tr><th>País</th><th>Contactados</th><th>Respuestas</th><th>Tasa resp.</th><th>Reuniones</th><th>Canal top</th></tr></thead><tbody id="d-pais-tbl"></tbody></table></div>
+  <div class="twrap"><table><thead><tr><th>País</th><th>Contactados</th><th>Reuniones</th><th>Canal top</th></tr></thead><tbody id="d-pais-tbl"></tbody></table></div>
 </section>
 
 <!-- ═══════ MI PANEL (SDR individual editable) ═══════ -->
@@ -674,8 +674,6 @@ function renderDash() {
   const perF   = document.getElementById('d-period').value;
   const recs   = filtered(sdrF, paisF, perF);
   const t      = agg(recs);
-  const tR     = t.contactados ? Math.round(t.respuestas/t.contactados*100) : 0;
-  const tC     = t.respuestas  ? Math.round(t.reuniones/t.respuestas*100) : 0;
 
   // Weekly breakdown
   const now2 = new Date();
@@ -718,13 +716,11 @@ function renderDash() {
   const paisRows = ['Mexico','Peru','Spain'].map(p => {
     const pr = filtered(sdrF, p, perF);
     const s  = agg(pr);
-    const r  = s.contactados ? Math.round(s.respuestas/s.contactados*100) : 0;
     const cc = {};
     pr.forEach(x => { if(x.canal) cc[x.canal]=(cc[x.canal]||0)+1; });
     const top = Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||'—';
     return `<tr><td>${flag(p)} ${paisLabel(p)}</td>
-      <td>${s.contactados.toLocaleString()}</td><td>${s.respuestas}</td>
-      <td><span class="pill ${pillClass(r)}">${r}%</span></td>
+      <td>${s.contactados.toLocaleString()}</td>
       <td><strong>${s.reuniones}</strong></td>
       <td><span class="pill pb">${top}</span></td></tr>`;
   }).join('');
