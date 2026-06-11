@@ -198,7 +198,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <option value="Leandro">Leandro</option>
       <option value="Grace">Grace</option>
       <option value="Carmen">Carmen</option>
-      <option value="Angela">Angela</option>
+      <option value="Luziana">Lu</option>
     </select>
     <label>País</label>
     <select id="d-pais" onchange="renderDash()">
@@ -284,7 +284,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- ═══════ HISTORIAL ═══════ -->
 <section id="sec-hist" class="sec">
   <div class="filters">
-    <label>SDR</label><select id="h-sdr" onchange="renderHist()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option></select>
+    <label>SDR</label><select id="h-sdr" onchange="renderHist()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select>
     <label>País</label><select id="h-pais" onchange="renderHist()"><option value="all">Todos</option><option value="Mexico">México</option><option value="Peru">Perú</option><option value="Spain">España</option></select>
     <button class="btn-sm" onclick="exportCSV()">CSV</button>
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
@@ -341,7 +341,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <label>SDR</label>
       <select id="c-sdr" onchange="renderCamps()">
         <option value="all">Todos</option>
-        <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Grupal</option>
+        <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option><option>Grupal</option>
       </select>
       <label>País</label>
       <select id="c-pais" onchange="renderCamps()">
@@ -360,7 +360,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nueva campaña</div>
     <div class="fgrid" style="margin-top:1rem;">
       <div class="fg"><label>SDR</label>
-        <select id="nc-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Grupal</option></select>
+        <select id="nc-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option><option>Grupal</option></select>
       </div>
       <div class="fg"><label>País</label>
         <select id="nc-pais"><option>España</option><option>México</option><option>Perú</option><option>Global</option></select>
@@ -398,9 +398,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx2tFL5G7oCLgFKtOxDfW0yqNoiKL_TOQd_eIi5-KoCfIzbTIfaIHqXSqfO7OD-KoxnzQ/exec';
 
 const SDRS = [
-  {id:'leandro', label:'Leandro', role:'SDR',        color:'#60A5FA', avatar:'LE'},
-  {id:'grace',   label:'Grace',   role:'Senior SDR', color:'#34D399', avatar:'GR'},
-  {id:'carmen',  label:'Carmen',  role:'Senior SDR', color:'#C084FC', avatar:'CA'},
+  {id:'leandro',  label:'Leandro',  role:'SDR',        color:'#60A5FA', avatar:'LE'},
+  {id:'grace',    label:'Grace',    role:'Senior SDR', color:'#34D399', avatar:'GR'},
+  {id:'carmen',   label:'Carmen',   role:'Senior SDR', color:'#C084FC', avatar:'CA'},
+  {id:'luziana',  label:'Luziana',  role:'Líder',      color:'#FB923C', avatar:'LU'},
 ];
 
 const PERIODS = [
@@ -684,7 +685,7 @@ function renderDash() {
     <div class="card g"><div class="card-lbl">WON</div><div class="card-val">${getAllReus().filter(r=>r.estado==='WON'&&(sdrF==='all'||r.sdr===sdrF)).length}</div><div class="card-sub">cerrados</div></div>`;
 
   // Por SDR
-  const sdrRows = ['Leandro','Grace','Carmen'].map(sdr => {
+  const sdrRows = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
     const sr = filtered(sdr, paisF, perF);
     const s  = agg(sr);
     const c  = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
@@ -721,7 +722,7 @@ function renderDash() {
 }
 
 function renderChart(recs) {
-  const sdrNames = ['Leandro','Grace','Carmen'];
+  const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
   const bySDR = {};
   sdrNames.forEach(s => { bySDR[s] = {c:0, re:0, ru:0}; });
   recs.forEach(r => {
@@ -736,7 +737,7 @@ function renderChart(recs) {
   const canvas = document.getElementById('act-chart');
   const hasData = sdrNames.some(s => bySDR[s].c > 0 || bySDR[s].ru > 0);
   if (!hasData) { canvas.parentElement.innerHTML='<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>'; return; }
-  const sdrColors = {Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#C084FC'};
+  const sdrColors = {Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#C084FC', Luziana:'#FB923C'};
   chartInst = new Chart(canvas,{
     type:'bar',
     data:{labels, datasets:[
@@ -1111,7 +1112,7 @@ function renderReus() {
 // ─── RANKING ─────────────────────────────────────────────────
 function renderRanking() {
   const now = new Date();
-  const stats = ['Leandro','Grace','Carmen'].map(sdr => {
+  const stats = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
     const monthRecs = records.filter(r=>{
       const d=new Date(r.fecha);
       return r.sdr===sdr && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
