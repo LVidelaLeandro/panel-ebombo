@@ -328,6 +328,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <label>País</label><select id="re-pais" onchange="renderReus()"><option value="all">Todos</option><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select>
     <label>Mes</label><select id="re-mes" onchange="renderReus()"><option value="all">Todos</option><option value="2">Mes 2</option><option value="3">Mes 3</option><option value="4">Mes 4</option><option value="5">Mes 5</option><option value="6">Mes 6</option></select>
     <label>Estado</label><select id="re-estado" onchange="renderReus()"><option value="all">Todos</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="HOT">HOT</option><option value="SI">Con propuesta</option><option value="NO">Sin propuesta</option></select>
+    <label>Realizada</label><select id="re-realizada" onchange="renderReus()"><option value="all">Todas</option><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select>
     </div>
     <button class="btn-primary" onclick="showAddReu()" style="font-size:12px;padding:8px 16px;">+ Nueva reunión</button>
   </div>
@@ -1424,10 +1425,11 @@ function renderHist() {
 
 // ─── REUNIONES ───────────────────────────────────────────────
 function filteredReus() {
-  const sdrF   = document.getElementById('re-sdr').value;
-  const paisF  = document.getElementById('re-pais').value;
-  const mesF   = document.getElementById('re-mes').value;
-  const estF   = document.getElementById('re-estado').value;
+  const sdrF  = document.getElementById('re-sdr').value;
+  const paisF = document.getElementById('re-pais').value;
+  const mesF  = document.getElementById('re-mes').value;
+  const estF  = document.getElementById('re-estado').value;
+  const realF = document.getElementById('re-realizada').value;
   return getAllReus().filter(r => {
     if (sdrF!=='all' && r.sdr!==sdrF) return false;
     if (paisF!=='all' && r.pais!==paisF) return false;
@@ -1437,6 +1439,7 @@ function filteredReus() {
     if (estF==='HOT' && r.estado!=='HOT') return false;
     if (estF==='SI' && r.cotizacion!=='SI') return false;
     if (estF==='NO' && r.cotizacion!=='NO') return false;
+    if (realF!=='all' && r.realizada!==realF) return false;
     return true;
   });
 }
