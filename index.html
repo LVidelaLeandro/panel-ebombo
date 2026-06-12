@@ -1569,7 +1569,6 @@ function exportReporte(period) {
   const curDay   = now.getDate();
   const curSemana = Math.ceil(curDay / 7);
 
-  // Semana: lunes a domingo de la semana actual
   const dow = now.getDay();
   const monday = new Date(now);
   monday.setDate(curDay - (dow === 0 ? 6 : dow - 1));
@@ -1581,20 +1580,17 @@ function exportReporte(period) {
   const weekStart = fmtD(monday);
   const weekEnd   = fmtD(sunday);
 
-  // ── Actividad diaria (registros de Sheets) ──
   const actRecs = records.filter(r => {
     if (!r.fecha) return false;
     if (period === 'week') return r.fecha >= weekStart && r.fecha <= weekEnd;
     return r.fecha.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`);
   }).sort((a,b) => a.fecha.localeCompare(b.fecha));
 
-  // ── Reuniones del período ──
   const allReus = getAllReus();
   const periodReus = allReus.filter(r =>
     period === 'week' ? (r.mes === curMonth && r.semana === curSemana) : r.mes === curMonth
   );
 
-  // ── Contactos de campaña del período ──
   const dailyAll = loadDailyData(curYear, curMonth);
   const weekDays = [];
   if (period === 'week') {
@@ -1610,7 +1606,6 @@ function exportReporte(period) {
     return {...c, total};
   }).filter(c => c.total > 0).sort((a,b) => b.total - a.total);
 
-  // ── Stats por SDR ──
   const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
   const sdrStats = sdrNames.map(sdr => {
     const logs = actRecs.filter(r => r.sdr === sdr);
@@ -1619,7 +1614,6 @@ function exportReporte(period) {
     return {
       sdr,
       contactadosLog: logs.reduce((s,r)=>s+n(r.contactados),0),
-      reunionesLog:   logs.reduce((s,r)=>s+n(r.reuniones),0),
       campContactos:  campC,
       agendadas:      reus.length,
       realizadas:     reus.filter(r=>r.realizada==='SI').length,
@@ -1630,175 +1624,248 @@ function exportReporte(period) {
       hot:            reus.filter(r=>r.estado==='HOT').length,
       pipeline:       reus.reduce((s,r)=>s+(r.monto||0),0),
     };
-  });
+  }).filter(s => s.agendadas > 0 || s.campContactos > 0 || s.contactadosLog > 0);
 
-  // ── Canal de origen ──
   const canalCount = {};
   periodReus.forEach(r => { if(r.canal) canalCount[r.canal]=(canalCount[r.canal]||0)+1; });
   const canalEntries = Object.entries(canalCount).sort((a,b)=>b[1]-a[1]);
 
-  // ── Totales globales ──
-  const totContactados  = actRecs.reduce((s,r)=>s+n(r.contactados),0);
-  const totCampCont     = campPeriod.reduce((s,c)=>s+c.total,0);
-  const totAgendadas    = periodReus.length;
-  const totRealizadas   = periodReus.filter(r=>r.realizada==='SI').length;
-  const totTodavia      = periodReus.filter(r=>r.realizada==='TODAVIA').length;
-  const totConCot       = periodReus.filter(r=>r.cotizacion==='SI').length;
-  const totWON          = periodReus.filter(r=>r.estado==='WON').length;
-  const totLOST         = periodReus.filter(r=>r.estado==='LOST').length;
-  const totHOT          = periodReus.filter(r=>r.estado==='HOT').length;
-  const totPipeline     = periodReus.reduce((s,r)=>s+(r.monto||0),0);
+  const paisMap = { Mexico:'México', Peru:'Perú', Spain:'España' };
+  const paisStats = ['Mexico','Peru','Spain'].map(pais => {
+    const preus = periodReus.filter(r => r.pais === pais);
+    const realizadas = preus.filter(r=>r.realizada==='SI').length;
+    const conCot = preus.filter(r=>r.cotizacion==='SI').length;
+    return { label: paisMap[pais], agendadas: preus.length, realizadas, conCot,
+      pipeline: preus.reduce((s,r)=>s+(r.monto||0),0),
+      conv: realizadas ? Math.round(conCot/realizadas*100) : 0 };
+  }).filter(p => p.agendadas > 0);
+
+  const totCampCont  = campPeriod.reduce((s,c)=>s+c.total,0);
+  const totAgendadas = periodReus.length;
+  const totRealizadas= periodReus.filter(r=>r.realizada==='SI').length;
+  const totTodavia   = periodReus.filter(r=>r.realizada==='TODAVIA').length;
+  const totConCot    = periodReus.filter(r=>r.cotizacion==='SI').length;
+  const totWON       = periodReus.filter(r=>r.estado==='WON').length;
+  const totLOST      = periodReus.filter(r=>r.estado==='LOST').length;
+  const totHOT       = periodReus.filter(r=>r.estado==='HOT').length;
+  const totPipeline  = periodReus.reduce((s,r)=>s+(r.monto||0),0);
 
   const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const label = period === 'week'
-    ? `Semana del ${monday.toLocaleDateString('es-ES',{day:'numeric',month:'long'})} al ${sunday.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}`
-    : `${MONTHS[curMonth-1]} ${curYear}`;
+  const dateLabel = now.toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
+  const pill = e => { if(!e) return '—'; const c=e==='WON'?'pwon':e==='LOST'?'plost':e==='HOT'?'phot':''; return c?`<span class="pill ${c}">${e}</span>`:e; };
+  const money = v => v ? '$'+Number(v).toLocaleString() : '—';
+  const dash  = v => (v!==undefined&&v!==null&&v!=='') ? v : '—';
 
-  const pillCss = e => e==='WON'?'won':e==='LOST'?'lost':e==='HOT'?'hot':e==='FREE TRIAL'?'ft':'';
-  const pill = e => e?`<span class="pill p${pillCss(e)}">${e}</span>`:'—';
-  const money = v => v?'$'+Number(v).toLocaleString():'—';
-  const dash  = v => v||'—';
+  const semanasData = period==='month' ? [1,2,3,4,5].map(sem=>{
+    const sr=periodReus.filter(r=>r.semana===sem);
+    return {sem,total:sr.length,realizadas:sr.filter(r=>r.realizada==='SI').length};
+  }).filter(s=>s.total>0) : [];
+
+  const secN = (base) => period==='month' ? base : base-1;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Reporte ${period==='week'?'Semanal':'Mensual'} — eBombo SDR</title>
+<title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo ${MONTHS[curMonth-1]} ${curYear}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1A1916;padding:2.5rem;max-width:1100px;margin:0 auto;background:#fff;}
-h1{font-size:26px;font-weight:800;color:#1A1916;margin-bottom:4px;}
-.sub{color:#7A7870;font-size:13px;margin-bottom:2.5rem;line-height:1.6;}
-h2{font-size:14px;font-weight:700;margin:2.5rem 0 .8rem;padding-bottom:6px;border-bottom:2px solid #1A6B4A;color:#1A6B4A;text-transform:uppercase;letter-spacing:.5px;}
-.cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:2rem;}
-.card{background:#F7F6F2;border:1px solid #E2E0D8;border-radius:8px;padding:14px 18px;min-width:120px;}
-.card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#7A7870;margin-bottom:5px;}
-.card-val{font-size:26px;font-weight:800;color:#1A6B4A;}
-.card-val.b{color:#1E3A5F;} .card-val.r{color:#8B2020;} .card-val.o{color:#92400E;} .card-val.p{color:#5B21B6;}
-table{width:100%;border-collapse:collapse;margin-bottom:1.5rem;font-size:12px;}
-th{background:#F0EFE9;padding:8px 10px;text-align:left;font-weight:700;border:1px solid #E2E0D8;white-space:nowrap;font-size:11px;}
-td{padding:7px 10px;border:1px solid #E2E0D8;vertical-align:middle;}
-tr:nth-child(even) td{background:#FAFAF8;}
-.g{color:#1A6B4A;font-weight:700;} .r{color:#8B2020;font-weight:700;} .b{color:#1E3A5F;font-weight:700;} .o{color:#92400E;font-weight:700;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13.5px;color:#111827;background:#F3F4F6;}
+.wrapper{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12);}
+.hdr{background:#0D1117;padding:2.5rem 3rem;}
+.hdr-hello{color:#9CA3AF;font-size:13px;font-weight:700;margin-bottom:.6rem;}
+.hdr-intro{color:#D1D5DB;font-size:13px;line-height:1.75;margin-bottom:1.5rem;border-left:3px solid #34D399;padding-left:1rem;}
+.hdr-title{font-size:17px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#34D399;margin-bottom:5px;}
+.hdr-sub{font-size:15px;font-weight:600;color:#F9FAFB;margin-bottom:1.5rem;}
+.hdr-meta{display:flex;flex-wrap:wrap;gap:1.5rem;font-size:11.5px;color:#6B7280;border-top:1px solid #1F2937;padding-top:1rem;}
+.hdr-meta strong{color:#9CA3AF;}
+.content{padding:2.5rem 3rem;}
+.section{margin-bottom:2.5rem;}
+.sec-hdr{display:flex;align-items:center;gap:12px;margin-bottom:1rem;padding-bottom:8px;border-bottom:2px solid #E5E7EB;}
+.sec-num{background:#0D1117;color:#34D399;min-width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.sec-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#111827;}
+.cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem;}
+.card{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:14px 18px;min-width:110px;}
+.card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:4px;}
+.card-val{font-size:28px;font-weight:800;color:#111827;line-height:1;}
+.card-val.g{color:#059669;} .card-val.b{color:#2563EB;} .card-val.o{color:#D97706;} .card-val.r{color:#DC2626;}
+table{width:100%;border-collapse:collapse;margin-bottom:1rem;font-size:12px;}
+thead tr{background:#0D1117;}
+th{padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+td{padding:9px 12px;border-bottom:1px solid #F3F4F6;vertical-align:middle;color:#374151;}
+tr:last-child td{border-bottom:none;}
+.tr-total td{background:#F0F9F4;font-weight:700;border-top:2px solid #D1FAE5;color:#065F46;}
+.g{color:#059669!important;font-weight:700;} .b{color:#2563EB!important;font-weight:700;} .o{color:#D97706!important;font-weight:700;} .r{color:#DC2626!important;font-weight:700;}
 .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
-.pwon{background:#D1FAE5;color:#065F46;} .plost{background:#FEE2E2;color:#991B1B;}
-.phot{background:#FEF3C7;color:#92400E;} .pft{background:#EDE9FE;color:#5B21B6;}
-.nodata{color:#9A9890;font-style:italic;padding:12px 0;font-size:12px;}
-.sdr-row td:first-child{font-weight:700;font-size:13px;}
-.footer{margin-top:3rem;font-size:11px;color:#7A7870;border-top:1px solid #E2E0D8;padding-top:1rem;}
-@media print{body{padding:1rem;} h2{margin-top:1.5rem;}}
+.pwon{background:#D1FAE5;color:#065F46;} .plost{background:#FEE2E2;color:#991B1B;} .phot{background:#FEF3C7;color:#92400E;}
+.nodata{color:#9CA3AF;font-style:italic;font-size:12px;padding:8px 0;}
+.ftr{background:#0D1117;padding:1.5rem 3rem;}
+.ftr-bye{color:#D1D5DB;font-size:13px;line-height:1.7;margin-bottom:1rem;}
+.ftr-sign{color:#6B7280;font-size:11px;border-top:1px solid #1F2937;padding-top:.75rem;}
+.ftr-sign strong{color:#9CA3AF;}
+@media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 </style></head><body>
-<h1>Reporte ${period==='week'?'Semanal':'Mensual'} — eBombo SDR</h1>
-<div class="sub">${label}<br>Generado el ${now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+<div class="wrapper">
 
-<h2>Resumen ejecutivo</h2>
-<div class="cards">
-  <div class="card"><div class="card-lbl">Contactados (logs)</div><div class="card-val b">${totContactados.toLocaleString()}</div></div>
-  <div class="card"><div class="card-lbl">Contactos campaña</div><div class="card-val b">${totCampCont.toLocaleString()}</div></div>
-  <div class="card"><div class="card-lbl">Reuniones agendadas</div><div class="card-val">${totAgendadas}</div></div>
-  <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val">${totRealizadas}</div></div>
-  <div class="card"><div class="card-lbl">Todavía</div><div class="card-val o">${totTodavia}</div></div>
-  <div class="card"><div class="card-lbl">Con cotización</div><div class="card-val">${totConCot}</div></div>
-  <div class="card"><div class="card-lbl">WON</div><div class="card-val g">${totWON}</div></div>
-  <div class="card"><div class="card-lbl">LOST</div><div class="card-val r">${totLOST}</div></div>
-  <div class="card"><div class="card-lbl">HOT</div><div class="card-val o">${totHOT}</div></div>
-  <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val">$${totPipeline.toLocaleString()}</div></div>
+<div class="hdr">
+  <div class="hdr-hello">Hola team!</div>
+  <div class="hdr-intro">Les traigo el reporte ${period==='week'?'de la semana — a puertas de cerrar el mes está bueno reflexionar sobre cómo vamos para ajustar donde tengamos que ajustar':'de cierre de mes — a continuación el detalle completo de la actividad del equipo'}, con toda la actitud!</div>
+  <div class="hdr-title">Reporte ${period==='week'?'Semanal':'Mensual'} SDR Outbound</div>
+  <div class="hdr-sub">${period==='week'?`Semana ${curSemana} — `:``}${MONTHS[curMonth-1]} ${curYear}</div>
+  <div class="hdr-meta">
+    <span><strong>Emisión:</strong> ${dateLabel}</span>
+    <span><strong>Equipo:</strong> SDR Outbound</span>
+    <span><strong>Mercados:</strong> Perú · México · España</span>
+  </div>
 </div>
 
-<h2>Origen de reuniones</h2>
-${canalEntries.length ? `<table>
-  <tr><th>Canal</th><th>Reuniones</th><th>%</th></tr>
-  ${canalEntries.map(([k,v])=>`<tr>
-    <td><strong>${k}</strong></td>
-    <td class="b">${v}</td>
-    <td>${Math.round(v/periodReus.length*100)}%</td>
-  </tr>`).join('')}
-</table>` : '<p class="nodata">Sin reuniones en el período.</p>'}
+<div class="content">
 
-<h2>Por SDR</h2>
-<table>
-  <tr><th>SDR</th><th>Cont. logs</th><th>Cont. campaña</th><th>Agendadas</th><th>Realizadas</th><th>Todavía</th><th>Con cot.</th><th>WON</th><th>LOST</th><th>HOT</th><th>Pipeline USD</th></tr>
-  ${sdrStats.map(s=>`<tr class="sdr-row">
-    <td>${s.sdr}</td>
-    <td class="b">${s.contactadosLog||'—'}</td>
-    <td class="b">${s.campContactos||'—'}</td>
-    <td>${s.agendadas||'—'}</td>
-    <td class="g">${s.realizadas||'—'}</td>
-    <td class="o">${s.todavia||'—'}</td>
-    <td>${s.conCot||'—'}</td>
-    <td class="g">${s.won||'—'}</td>
-    <td class="r">${s.lost||'—'}</td>
-    <td class="o">${s.hot||'—'}</td>
-    <td class="g">${s.pipeline?'$'+s.pipeline.toLocaleString():'—'}</td>
-  </tr>`).join('')}
-</table>
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">1</span><span class="sec-title">Resumen Ejecutivo</span></div>
+  <div class="cards">
+    <div class="card"><div class="card-lbl">Reuniones</div><div class="card-val g">${totAgendadas}</div></div>
+    <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val g">${totRealizadas}</div></div>
+    <div class="card"><div class="card-lbl">Todavía</div><div class="card-val o">${totTodavia}</div></div>
+    <div class="card"><div class="card-lbl">Con cotización</div><div class="card-val b">${totConCot}</div></div>
+    <div class="card"><div class="card-lbl">WON</div><div class="card-val g">${totWON}</div></div>
+    <div class="card"><div class="card-lbl">LOST</div><div class="card-val r">${totLOST}</div></div>
+    <div class="card"><div class="card-lbl">HOT</div><div class="card-val o">${totHOT}</div></div>
+    <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val b">${money(totPipeline)}</div></div>
+    <div class="card"><div class="card-lbl">Contactos campaña</div><div class="card-val">${totCampCont.toLocaleString()}</div></div>
+  </div>
+</div>
 
-<h2>Reuniones del período (${periodReus.length})</h2>
-${periodReus.length ? `<table>
-  <tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr>
-  ${periodReus.sort((a,b)=>a.sdr.localeCompare(b.sdr)).map(r=>`<tr>
-    <td>${r.sdr}</td>
-    <td><strong>${r.empresa}</strong></td>
-    <td>${r.pais}</td><td>${r.canal}</td>
-    <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'o':'r'}">${r.realizada}</td>
-    <td class="${r.cotizacion==='SI'?'g':''}">${r.cotizacion}</td>
-    <td>${pill(r.estado)}</td>
-    <td class="g">${money(r.monto)}</td>
-  </tr>`).join('')}
-</table>` : '<p class="nodata">Sin reuniones registradas para este período.</p>'}
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">2</span><span class="sec-title">Avance de Reuniones — Por SDR</span></div>
+  ${sdrStats.length ? `<table>
+    <thead><tr><th>SDR</th><th>Agendadas</th><th>Realizadas</th><th>Todavía</th><th>Con cot.</th><th>WON</th><th>LOST</th><th>HOT</th><th>Pipeline USD</th><th>Contactos</th></tr></thead>
+    <tbody>
+    ${sdrStats.map(s=>`<tr>
+      <td><strong>${s.sdr}</strong></td>
+      <td class="b">${s.agendadas||'—'}</td>
+      <td class="g">${s.realizadas||'—'}</td>
+      <td class="o">${s.todavia||'—'}</td>
+      <td>${s.conCot||'—'}</td>
+      <td class="g">${s.won||'—'}</td>
+      <td class="r">${s.lost||'—'}</td>
+      <td class="o">${s.hot||'—'}</td>
+      <td class="g">${s.pipeline ? money(s.pipeline) : '—'}</td>
+      <td>${s.campContactos ? s.campContactos.toLocaleString() : '—'}</td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL EQUIPO</td>
+      <td>${totAgendadas}</td><td>${totRealizadas}</td><td>${totTodavia}</td>
+      <td>${totConCot}</td><td>${totWON}</td><td>${totLOST}</td><td>${totHOT}</td>
+      <td>${totPipeline ? money(totPipeline) : '—'}</td><td>${totCampCont ? totCampCont.toLocaleString() : '—'}</td>
+    </tr>
+    </tbody>
+  </table>` : '<p class="nodata">Sin reuniones registradas para el período.</p>'}
+</div>
 
-<h2>Pipeline activo — con propuesta o HOT/WON</h2>
-${(()=>{
-  const pip = periodReus.filter(r=>r.monto>0||r.estado==='HOT'||r.estado==='WON'||r.cotizacion==='SI')
-    .sort((a,b)=>(b.monto||0)-(a.monto||0));
-  return pip.length ? `<table>
-    <tr><th>SDR</th><th>Empresa</th><th>País</th><th>Estado</th><th>Monto USD</th></tr>
-    ${pip.map(r=>`<tr>
-      <td>${r.sdr}</td><td><strong>${r.empresa}</strong></td><td>${r.pais}</td>
-      <td>${pill(r.estado)||'En proceso'}</td>
+${period==='month' && semanasData.length ? `<div class="section">
+  <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Evolución Semanal de Reuniones</span></div>
+  <table>
+    <thead><tr><th>Semana</th><th>Reuniones agendadas</th><th>Realizadas</th></tr></thead>
+    <tbody>
+    ${semanasData.map(s=>`<tr>
+      <td><strong>Semana ${s.sem}</strong></td>
+      <td class="b">${s.total}</td>
+      <td class="g">${s.realizadas||'—'}</td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td></tr>
+    </tbody>
+  </table>
+</div>` : ''}
+
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${period==='month'?'4':'3'}</span><span class="sec-title">Reuniones y Pipeline por País</span></div>
+  ${paisStats.length ? `<table>
+    <thead><tr><th>País</th><th>Reuniones</th><th>Realizadas</th><th>Con cot.</th><th>% conv.</th><th>Pipeline USD</th></tr></thead>
+    <tbody>
+    ${paisStats.map(p=>`<tr>
+      <td><strong>${p.label}</strong></td>
+      <td class="b">${p.agendadas}</td>
+      <td class="g">${p.realizadas||'—'}</td>
+      <td>${p.conCot||'—'}</td>
+      <td class="${p.conv>=50?'g':p.conv>=25?'o':'r'}">${p.realizadas ? p.conv+'%' : '—'}</td>
+      <td class="g">${p.pipeline ? money(p.pipeline) : '—'}</td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td>
+      <td>${totConCot}</td>
+      <td>${totRealizadas ? Math.round(totConCot/totRealizadas*100)+'%' : '—'}</td>
+      <td>${totPipeline ? money(totPipeline) : '—'}</td>
+    </tr>
+    </tbody>
+  </table>` : '<p class="nodata">Sin reuniones por país en el período.</p>'}
+</div>
+
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${period==='month'?'5':'4'}</span><span class="sec-title">Canal de Agendamiento y Conversión</span></div>
+  ${canalEntries.length ? `<table>
+    <thead><tr><th>Canal / Origen</th><th>Reuniones</th><th>% del total</th></tr></thead>
+    <tbody>
+    ${canalEntries.map(([k,v])=>`<tr>
+      <td><strong>${k}</strong></td>
+      <td class="b">${v}</td>
+      <td>${totAgendadas ? Math.round(v/totAgendadas*100)+'%' : '—'}</td>
+    </tr>`).join('')}
+    </tbody>
+  </table>` : '<p class="nodata">Sin datos de canal para el período.</p>'}
+</div>
+
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${period==='month'?'6':'5'}</span><span class="sec-title">Campañas de Outreach — Contactos Impactados</span></div>
+  ${campPeriod.length ? `<table>
+    <thead><tr><th>Campaña</th><th>SDR</th><th>País</th><th>Contactos</th></tr></thead>
+    <tbody>
+    ${campPeriod.map(c=>`<tr>
+      <td style="font-size:11.5px;">${c.nombre}</td>
+      <td>${c.sdr}</td><td>${c.pais}</td>
+      <td class="b"><strong>${c.total.toLocaleString()}</strong></td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td colspan="3">TOTAL</td><td>${totCampCont.toLocaleString()}</td></tr>
+    </tbody>
+  </table>` : '<p class="nodata">Sin contactos de campaña cargados para este período.</p>'}
+</div>
+
+<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${period==='month'?'7':'6'}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
+  ${periodReus.length ? `<table>
+    <thead><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr></thead>
+    <tbody>
+    ${periodReus.sort((a,b)=>a.sdr.localeCompare(b.sdr)).map(r=>`<tr>
+      <td>${r.sdr}</td>
+      <td><strong>${r.empresa}</strong></td>
+      <td>${dash(r.pais)}</td>
+      <td>${dash(r.canal)}</td>
+      <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'o':'r'}">${r.realizada||'—'}</td>
+      <td class="${r.cotizacion==='SI'?'g':''}">${r.cotizacion||'—'}</td>
+      <td>${pill(r.estado)}</td>
       <td class="g">${money(r.monto)}</td>
     </tr>`).join('')}
-  </table>` : '<p class="nodata">Sin oportunidades activas con propuesta en el período.</p>';
-})()}
+    </tbody>
+  </table>` : '<p class="nodata">Sin reuniones registradas para este período.</p>'}
+</div>
 
-<h2>Actividad diaria registrada (${actRecs.length} registros)</h2>
-${actRecs.length ? `<table>
-  <tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Reuniones</th><th>Notas</th></tr>
-  ${actRecs.map(r=>`<tr>
-    <td style="white-space:nowrap;font-family:monospace;">${r.fecha}</td>
-    <td>${r.sdr}</td><td>${dash(r.pais)}</td><td>${dash(r.canal)}</td>
-    <td class="b">${dash(r.contactados)}</td>
-    <td class="g">${dash(r.reuniones)}</td>
-    <td style="font-size:11px;color:#555;max-width:200px;">${dash(r.notas)}</td>
-  </tr>`).join('')}
-</table>` : '<p class="nodata">Sin registros de actividad diaria para este período (datos desde Google Sheets).</p>'}
+</div>
 
-<h2>Contactos cargados por campaña (${campPeriod.length} campañas activas)</h2>
-${campPeriod.length ? `<table>
-  <tr><th>Campaña</th><th>SDR</th><th>País</th><th>Contactos</th></tr>
-  ${campPeriod.map(c=>`<tr>
-    <td style="font-size:12px;">${c.nombre}</td>
-    <td>${c.sdr}</td><td>${c.pais}</td>
-    <td class="b"><strong>${c.total.toLocaleString()}</strong></td>
-  </tr>`).join('')}
-  <tr style="background:#F0EFE9;">
-    <td colspan="3"><strong>TOTAL</strong></td>
-    <td class="b"><strong>${totCampCont.toLocaleString()}</strong></td>
-  </tr>
-</table>` : '<p class="nodata">Sin contactos de campaña cargados para este período.</p>'}
+<div class="ftr">
+  <div class="ftr-bye">Gracias team! Que tengan un excelente fin de semana, volvemos recargados 💪</div>
+  <div class="ftr-sign"><strong>ebombo — SDR Outbound</strong> &nbsp;·&nbsp; Reporte Interno ${MONTHS[curMonth-1]} ${curYear} &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Generado el ${dateLabel}</div>
+</div>
 
-<div class="footer">Panel SDR eBombo &nbsp;·&nbsp; Reporte generado el ${now.toISOString()} &nbsp;·&nbsp; ${period==='week'?'Reporte Semanal':'Reporte Mensual'}</div>
+</div>
 </body></html>`;
 
-  const fname   = `reporte_${period==='week'?'semana':'mes'}_${fmtD(now)}.html`;
-  const emails  = getReporteEmails();
-  const ejsCfg  = getEmailJSConfig();
+  // Siempre descargar
+  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.html`;
+  const a = Object.assign(document.createElement('a'), {
+    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
+    download: fname
+  });
+  a.click();
 
+  // También enviar por correo si hay destinatarios configurados
+  const emails = getReporteEmails();
   if (emails.length) {
     sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
-  } else {
-    const a = Object.assign(document.createElement('a'), {
-      href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
-      download: fname
-    });
-    a.click();
   }
 }
 
