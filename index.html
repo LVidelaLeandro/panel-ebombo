@@ -126,8 +126,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .period-btn.on{background:var(--s2);color:var(--text);border-color:var(--border2);}
 
 /* CHART */
-.chart-wrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;}
-.chart-inner{position:relative;width:100%;height:200px;}
+.chart-wrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;}
+.chart-inner{position:relative;width:100%;height:220px;}
+.chart-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center;gap:7px;}
+.chart-title .cdot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+/* DASH GRID */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;}
+.dash-grid .full{grid-column:1/-1;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem;}
+/* FUNNEL */
+.funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.funnel-label{font-size:11px;color:var(--muted);width:80px;text-align:right;flex-shrink:0;}
+.funnel-bar-wrap{flex:1;background:var(--s1);border-radius:4px;height:22px;position:relative;overflow:hidden;}
+.funnel-bar{height:100%;border-radius:4px;transition:width .4s ease;}
+.funnel-val{font-size:11px;font-weight:700;color:var(--text);position:absolute;right:8px;top:50%;transform:translateY(-50%);}
+.funnel-pct{font-size:10px;color:var(--muted);width:36px;text-align:right;flex-shrink:0;}
 
 /* EMAIL MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center;}
@@ -209,7 +222,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- ═══════ DASHBOARD ═══════ -->
 <section id="sec-dash" class="sec on">
-  <div class="filters" style="margin-bottom:1.5rem;">
+  <div class="filters" style="margin-bottom:1.25rem;">
     <label>SDR</label>
     <select id="d-sdr" onchange="renderDash()">
       <option value="all">Todos</option>
@@ -236,21 +249,62 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
     <button class="btn-sm" onclick="openEmailModal()" style="color:#F472B6;border-color:#4B1D3F;">✉️ Destinatarios</button>
   </div>
-  <div class="cards" id="d-cards"></div>
-  <div class="stitle" style="margin-top:.5rem;">📈 Actividad por persona</div>
-  <div class="chart-wrap"><div class="chart-inner"><canvas id="act-chart" role="img" aria-label="Actividad diaria"></canvas></div></div>
-  <div class="stitle">🎯 Origen de reuniones</div>
-  <div class="chart-wrap">
-    <div style="display:flex;gap:2rem;align-items:center;">
-      <div style="position:relative;width:160px;height:160px;flex-shrink:0;"><canvas id="canal-chart"></canvas></div>
-      <div id="canal-legend" style="flex:1;"></div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid" id="d-cards"></div>
+
+  <!-- FILA 1: Timeline (full width) -->
+  <div class="dash-grid">
+    <div class="chart-wrap full">
+      <div class="chart-title"><span class="cdot"></span>Actividad diaria — Contactados por persona</div>
+      <div class="chart-inner" style="height:200px;"><canvas id="timeline-chart"></canvas></div>
     </div>
   </div>
-  <div class="stitle">👥 Actividad por persona y canal</div>
-  <div class="chart-wrap"><div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart" role="img" aria-label="Actividad por persona y canal"></canvas></div></div>
-  <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
-  <div class="stitle">🌎 Por país</div>
-  <div class="twrap"><table><thead><tr><th>País</th><th>Contactados</th><th>Reuniones</th><th>Canal top</th></tr></thead><tbody id="d-pais-tbl"></tbody></table></div>
+
+  <!-- FILA 2: Actividad por canal + Origen de reuniones -->
+  <div class="dash-grid">
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#C084FC;"></span>Contactados por persona y canal</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart"></canvas></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>Origen de reuniones</div>
+      <div style="display:flex;gap:1.5rem;align-items:center;height:220px;">
+        <div style="position:relative;width:180px;height:180px;flex-shrink:0;"><canvas id="canal-chart"></canvas></div>
+        <div id="canal-legend" style="flex:1;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILA 3: Reuniones por SDR + Embudo -->
+  <div class="dash-grid">
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#34D399;"></span>Reuniones por persona</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="reu-sdr-chart"></canvas></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#FB923C;"></span>Embudo de conversión</div>
+      <div id="funnel-wrap" style="padding-top:.5rem;"></div>
+    </div>
+  </div>
+
+  <!-- FILA 4: Tablas SDR + País -->
+  <div class="dash-grid">
+    <div>
+      <div class="stitle" style="margin-bottom:.5rem;">Por SDR</div>
+      <div class="twrap"><table>
+        <thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Realizadas</th><th>Cotizaciones</th><th>Pipeline</th><th>WON</th><th>Conv%</th></tr></thead>
+        <tbody id="d-sdr-tbl"></tbody>
+      </table></div>
+    </div>
+    <div>
+      <div class="stitle" style="margin-bottom:.5rem;">Por país</div>
+      <div class="twrap"><table>
+        <thead><tr><th>País</th><th>Contactados</th><th>Reuniones</th><th>Realizadas</th><th>Pipeline</th><th>Conv%</th></tr></thead>
+        <tbody id="d-pais-tbl"></tbody>
+      </table></div>
+    </div>
+  </div>
 </section>
 
 <!-- ═══════ MI PANEL (SDR individual editable) ═══════ -->
@@ -447,6 +501,8 @@ let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
 let chartInst = null;
 let canalChartInst = null;
 let sdrCanalChartInst = null;
+let timelineChartInst = null;
+let reuSdrChartInst = null;
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -930,112 +986,140 @@ function inc(id){const e=document.getElementById(id);e.value=Math.max(0,(parseIn
 function dec(id){const e=document.getElementById(id);e.value=Math.max(0,(parseInt(e.value)||0)-1);}
 
 // ─── DASHBOARD ───────────────────────────────────────────────
-function renderDash() {
-  const sdrF   = document.getElementById('d-sdr').value;
-  const paisF  = document.getElementById('d-pais').value;
-  const perF   = document.getElementById('d-period').value;
-  const recs   = filtered(sdrF, paisF, perF);
-  const t      = agg(recs);
+const SDR_COLORS = { Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#C084FC', Luziana:'#FB923C' };
+const CHART_DEFAULTS = {
+  responsive:true, maintainAspectRatio:false,
+  animation:{ duration:400 },
+  plugins:{ legend:{ display:false } }
+};
 
-  // Weekly breakdown
-  const now2 = new Date();
-  const weekStart = new Date(now2); weekStart.setDate(now2.getDate()-now2.getDay()+1);
-  const weekRecs = recs.filter(r=>new Date(r.fecha)>=weekStart);
-  const tw = agg(weekRecs);
-  const cotizaciones = getAllReus().filter(r=>{
-    if(sdrF!=='all'&&r.sdr!==sdrF) return false;
-    if(paisF!=='all'){const pm={Mexico:'MEXICO',Peru:'PERU',Spain:'ESPANA'};if(r.pais!==pm[paisF]) return false;}
-    return r.cotizacion==='SI'&&r.monto>0;
+function filterReus(sdrF, paisF, perF) {
+  const now3 = new Date();
+  const cm = now3.getMonth()+1;
+  const cs = Math.ceil(now3.getDate()/7);
+  return getAllReus().filter(r => {
+    if (sdrF!=='all' && r.sdr!==sdrF) return false;
+    if (paisF!=='all' && r.pais!==paisF) return false;
+    if (perF==='week')  return r.mes===cm && r.semana===cs;
+    if (perF==='month') return r.mes===cm;
+    return true;
   });
-  const totalCot = cotizaciones.reduce((a,r)=>a+(r.monto||0),0);
-  document.getElementById('d-cards').innerHTML = `
-    <div class="card b"><div class="card-lbl">Contactados</div><div class="card-val">${t.contactados.toLocaleString()}</div><div class="card-sub">semana: ${tw.contactados}</div></div>
-    <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${t.reuniones}</div><div class="card-sub">semana: ${tw.reuniones}</div></div>
-    <div class="card a"><div class="card-lbl">Cotizaciones</div><div class="card-val">${cotizaciones.length}</div><div class="card-sub">$${Math.round(totalCot/1000)}k pipeline</div></div>
-    <div class="card g"><div class="card-lbl">WON</div><div class="card-val">${getAllReus().filter(r=>r.estado==='WON'&&(sdrF==='all'||r.sdr===sdrF)).length}</div><div class="card-sub">cerrados</div></div>`;
+}
 
-  // Por SDR
+function renderDash() {
+  const sdrF = document.getElementById('d-sdr').value;
+  const paisF = document.getElementById('d-pais').value;
+  const perF  = document.getElementById('d-period').value;
+  const recs  = filtered(sdrF, paisF, perF);
+  const t     = agg(recs);
+  const reus  = filterReus(sdrF, paisF, perF);
+
+  const realizadas = reus.filter(r=>r.realizada==='SI').length;
+  const conCot     = reus.filter(r=>r.cotizacion==='SI').length;
+  const pipeline   = reus.reduce((s,r)=>s+(r.monto||0),0);
+  const won        = reus.filter(r=>r.estado==='WON').length;
+  const hot        = reus.filter(r=>r.estado==='HOT').length;
+  const conv       = t.contactados ? (reus.length/t.contactados*100).toFixed(2) : 0;
+
+  document.getElementById('d-cards').innerHTML = `
+    <div class="card b"><div class="card-lbl">Contactados</div><div class="card-val">${t.contactados.toLocaleString()}</div><div class="card-sub">logs de actividad</div></div>
+    <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${reus.length}</div><div class="card-sub">${realizadas} realizadas</div></div>
+    <div class="card a"><div class="card-lbl">Cotizaciones</div><div class="card-val">${conCot}</div><div class="card-sub">$${pipeline>0?Math.round(pipeline/1000)+'k':0} pipeline</div></div>
+    <div class="card g"><div class="card-lbl">WON</div><div class="card-val">${won}</div><div class="card-sub">${hot} HOT activos</div></div>
+    <div class="card b"><div class="card-lbl">Tasa conv.</div><div class="card-val" style="font-size:20px;">${conv}%</div><div class="card-sub">cont → reunión</div></div>
+    <div class="card a"><div class="card-lbl">Respuestas</div><div class="card-val">${t.respuestas}</div><div class="card-sub">${t.contactados?Math.round(t.respuestas/t.contactados*100):0}% reply rate</div></div>`;
+
+  // Tabla por SDR (enriquecida con datos de reuniones)
   const sdrRows = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
-    const sr = filtered(sdr, paisF, perF);
-    const s  = agg(sr);
-    const c  = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
-    const cc = {};
-    sr.forEach(x => { if(x.canal) cc[x.canal]=(cc[x.canal]||0)+1; });
-    const top = Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||'—';
+    const sr   = filtered(sdr, paisF, perF);
+    const s    = agg(sr);
+    const sreus = reus.filter(r=>r.sdr===sdr);
+    const real = sreus.filter(r=>r.realizada==='SI').length;
+    const cot  = sreus.filter(r=>r.cotizacion==='SI').length;
+    const pip  = sreus.reduce((a,r)=>a+(r.monto||0),0);
+    const w    = sreus.filter(r=>r.estado==='WON').length;
+    const conv = sreus.length && real ? Math.round(cot/real*100) : 0;
     const sdrInfo = SDRS.find(x=>x.label===sdr)||{color:'#6B7280',avatar:sdr.slice(0,2).toUpperCase()};
+    if (!s.contactados && !sreus.length) return '';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:8px;">
         <div style="width:26px;height:26px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${sdrInfo.color}">${sdrInfo.avatar}</div>
         <strong>${sdr}</strong></div></td>
       <td>${s.contactados.toLocaleString()}</td>
-      <td><strong>${s.reuniones}</strong></td>
-      <td><span class="pill ${c>=1?'pg':'pa'}">${c}%</span></td>
-      <td><span class="pill pb">${top}</span></td></tr>`;
-  }).join('');
+      <td>${sreus.length}</td>
+      <td class="${real?'':'muted'}">${real}</td>
+      <td>${cot||'—'}</td>
+      <td class="${pip>0?'g':''}">${pip>0?'$'+pip.toLocaleString():'—'}</td>
+      <td class="${w?'g':''}">${w||'—'}</td>
+      <td><span class="pill ${conv>=50?'pg':conv>=25?'pa':'pb'}">${conv}%</span></td></tr>`;
+  }).filter(Boolean).join('');
   document.getElementById('d-sdr-tbl').innerHTML = sdrRows||'<tr class="empty-row"><td colspan="8">Sin datos para este período</td></tr>';
 
-  // Por país
+  // Tabla por país (enriquecida)
   const paisRows = ['Mexico','Peru','Spain'].map(p => {
-    const pr = filtered(sdrF, p, perF);
-    const s  = agg(pr);
-    const cc = {};
-    pr.forEach(x => { if(x.canal) cc[x.canal]=(cc[x.canal]||0)+1; });
-    const top = Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||'—';
+    const pr   = filtered(sdrF, p, perF);
+    const s    = agg(pr);
+    const preus = filterReus(sdrF, p, perF);
+    const real  = preus.filter(r=>r.realizada==='SI').length;
+    const pip   = preus.reduce((a,r)=>a+(r.monto||0),0);
+    const cot   = preus.filter(r=>r.cotizacion==='SI').length;
+    const conv  = real ? Math.round(cot/real*100) : 0;
+    if (!s.contactados && !preus.length) return '';
     return `<tr><td>${flag(p)} ${paisLabel(p)}</td>
       <td>${s.contactados.toLocaleString()}</td>
-      <td><strong>${s.reuniones}</strong></td>
-      <td><span class="pill pb">${top}</span></td></tr>`;
-  }).join('');
-  document.getElementById('d-pais-tbl').innerHTML = paisRows;
+      <td>${preus.length}</td>
+      <td>${real||'—'}</td>
+      <td class="${pip>0?'g':''}">${pip>0?'$'+pip.toLocaleString():'—'}</td>
+      <td><span class="pill ${conv>=50?'pg':conv>=25?'pa':'pb'}">${conv?conv+'%':'—'}</span></td></tr>`;
+  }).filter(Boolean).join('');
+  document.getElementById('d-pais-tbl').innerHTML = paisRows||'<tr class="empty-row"><td colspan="6">Sin datos</td></tr>';
 
-  renderChart(recs);
+  renderTimelineChart(recs);
   renderSdrCanalChart(recs);
-
-  // Gráfico de origen de reuniones (filtrado por sdr/país/período)
-  const now3 = new Date();
-  const cm3 = now3.getMonth()+1;
-  const cs3 = Math.ceil(now3.getDate()/7);
-  const reusFilt = getAllReus().filter(r => {
-    if(sdrF!=='all' && r.sdr!==sdrF) return false;
-    if(paisF!=='all'){const pm={Mexico:'MEXICO',Peru:'PERU',Spain:'ESPANA'};if(r.pais!==pm[paisF]) return false;}
-    if(perF==='week')  return r.mes===cm3 && r.semana===cs3;
-    if(perF==='month') return r.mes===cm3;
-    return true;
-  });
-  renderCanalChart(reusFilt);
+  renderCanalChart(reus);
+  renderReuSdrChart(reus);
+  renderFunnel(t.contactados, t.respuestas, reus.length, realizadas, conCot, won);
 }
 
-function renderChart(recs) {
-  const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
-  const bySDR = {};
-  sdrNames.forEach(s => { bySDR[s] = {c:0, re:0, ru:0}; });
+function renderTimelineChart(recs) {
+  if (timelineChartInst) { timelineChartInst.destroy(); timelineChartInst = null; }
+  const canvas = document.getElementById('timeline-chart');
+  if (!recs.length) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin registros de actividad</p>';
+    return;
+  }
+  // Agrupar por fecha → por SDR
+  const byDate = {};
   recs.forEach(r => {
-    const name = (r.sdr||'').trim();
-    if (!bySDR[name]) return;
-    bySDR[name].c  += n(r.contactados);
-    bySDR[name].re += n(r.respuestas);
-    bySDR[name].ru += n(r.reuniones);
+    if (!r.fecha) return;
+    if (!byDate[r.fecha]) byDate[r.fecha] = {};
+    const sdr = r.sdr || 'Otros';
+    byDate[r.fecha][sdr] = (byDate[r.fecha][sdr]||0) + n(r.contactados);
   });
-  const labels = sdrNames;
-  if (chartInst) { chartInst.destroy(); chartInst=null; }
-  const canvas = document.getElementById('act-chart');
-  const hasData = sdrNames.some(s => bySDR[s].c > 0 || bySDR[s].ru > 0);
-  if (!hasData) { canvas.parentElement.innerHTML='<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>'; return; }
-  const sdrColors = {Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#C084FC', Luziana:'#FB923C'};
-  chartInst = new Chart(canvas,{
-    type:'bar',
-    data:{labels, datasets:[
-      {label:'Contactados', data:sdrNames.map(s=>bySDR[s].c),  backgroundColor:sdrNames.map(s=>sdrColors[s]+'30'), borderColor:sdrNames.map(s=>sdrColors[s]), borderWidth:1.5},
-      {label:'Reuniones',   data:sdrNames.map(s=>bySDR[s].ru), backgroundColor:'#34D39940', borderColor:'#34D399', borderWidth:1.5},
-    ]},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{display:true, labels:{color:'#6B7280', font:{size:11}, boxWidth:12}},
-        tooltip:{callbacks:{label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}`}}
+  const labels = Object.keys(byDate).sort();
+  const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
+  const datasets = sdrNames.filter(s => recs.some(r=>r.sdr===s)).map(sdr => ({
+    label: sdr,
+    data: labels.map(d => byDate[d][sdr]||0),
+    borderColor: SDR_COLORS[sdr],
+    backgroundColor: SDR_COLORS[sdr]+'20',
+    borderWidth: 2,
+    pointRadius: labels.length > 20 ? 2 : 4,
+    pointHoverRadius: 6,
+    tension: 0.35,
+    fill: false,
+  }));
+  timelineChartInst = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: { ...CHART_DEFAULTS,
+      plugins: {
+        legend: { display: true, position: 'top', labels: { color: '#9CA3AF', font:{size:11}, boxWidth:10, padding:16 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} contactados` } }
       },
-      scales:{
-        x:{ticks:{font:{size:11},color:'#9CA3AF'},grid:{color:'rgba(255,255,255,0.04)'}},
-        y:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}}
+      scales: {
+        x: { ticks: { font:{size:10}, color:'#6B7280', maxRotation:45 }, grid: { color:'rgba(255,255,255,0.04)' } },
+        y: { ticks: { font:{size:10}, color:'#6B7280' }, grid: { color:'rgba(255,255,255,0.04)' }, beginAtZero:true }
       }
     }
   });
@@ -1043,52 +1127,47 @@ function renderChart(recs) {
 
 function renderSdrCanalChart(recs) {
   const CANAL_COLORS = {
-    'Email':    {bg:'#60A5FA55', border:'#60A5FA'},
-    'LinkedIn': {bg:'#C084FC55', border:'#C084FC'},
-    'Llamada':  {bg:'#FB923C55', border:'#FB923C'},
-    'WhatsApp': {bg:'#34D39955', border:'#34D399'},
-    'Otros':    {bg:'#9CA3AF55', border:'#9CA3AF'},
+    'Email':    { bg:'#60A5FA44', border:'#60A5FA' },
+    'LinkedIn': { bg:'#C084FC44', border:'#C084FC' },
+    'Llamada':  { bg:'#FB923C44', border:'#FB923C' },
+    'WhatsApp': { bg:'#34D39944', border:'#34D399' },
+    'Otros':    { bg:'#9CA3AF44', border:'#9CA3AF' },
   };
-  const SDRS_LIST = ['Leandro','Grace','Carmen'];
+  const SDRS_LIST = ['Leandro','Grace','Carmen','Luziana'].filter(s=>recs.some(r=>r.sdr===s));
   const allCanals = Object.keys(CANAL_COLORS);
   const data = {};
   SDRS_LIST.forEach(sdr => { data[sdr] = {}; allCanals.forEach(c => data[sdr][c] = 0); });
   recs.forEach(r => {
-    const sdr = r.sdr;
-    if (!SDRS_LIST.includes(sdr)) return;
+    if (!SDRS_LIST.includes(r.sdr)) return;
     const canal = allCanals.includes(r.canal) ? r.canal : 'Otros';
-    data[sdr][canal] += n(r.contactados);
+    data[r.sdr][canal] += n(r.contactados);
   });
   const canvas = document.getElementById('sdr-canal-chart');
   if (sdrCanalChartInst) { sdrCanalChartInst.destroy(); sdrCanalChartInst = null; }
-  const hasData = SDRS_LIST.some(s => allCanals.some(c => data[s][c] > 0));
-  if (!hasData) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>';
+  if (!SDRS_LIST.length || !recs.length) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos</p>';
     return;
   }
-  const datasets = allCanals.map(canal => ({
-    label: canal,
-    data: SDRS_LIST.map(sdr => data[sdr][canal]),
-    backgroundColor: CANAL_COLORS[canal].bg,
-    borderColor: CANAL_COLORS[canal].border,
-    borderWidth: 1.5,
-    borderRadius: 3,
-  }));
   sdrCanalChartInst = new Chart(canvas, {
     type: 'bar',
-    data: { labels: SDRS_LIST, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
+    data: {
+      labels: SDRS_LIST,
+      datasets: allCanals.filter(c=>SDRS_LIST.some(s=>data[s][c]>0)).map(canal => ({
+        label: canal,
+        data: SDRS_LIST.map(sdr => data[sdr][canal]),
+        backgroundColor: CANAL_COLORS[canal].bg,
+        borderColor: CANAL_COLORS[canal].border,
+        borderWidth: 1.5,
+        borderRadius: 2,
+      }))
+    },
+    options: { ...CHART_DEFAULTS,
       scales: {
-        x: { stacked: true, ticks: { font:{size:12}, color:'var(--text)' }, grid: { display: false } },
-        y: { stacked: true, ticks: { font:{size:10}, color:'#6B7280' }, grid: { color:'rgba(255,255,255,0.04)' } },
+        x: { stacked:true, ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+        y: { stacked:true, ticks:{ font:{size:10}, color:'#6B7280' }, grid:{ color:'rgba(255,255,255,0.04)' } },
       },
       plugins: {
-        legend: {
-          display: true, position: 'bottom',
-          labels: { font:{size:11}, color:'var(--text)', boxWidth:12, padding:14 }
-        },
+        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'var(--text)', boxWidth:10, padding:12 } },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}` } }
       }
     }
@@ -1096,10 +1175,10 @@ function renderSdrCanalChart(recs) {
 }
 
 function renderCanalChart(reus) {
-  const canalColors = {REPLY:'#60A5FA',PROSPECCION:'#34D399',LINKEDIN:'#C084FC',LLAMADA:'#FB923C',INBOUND:'#2DD4BF'};
+  const canalColors = { REPLY:'#60A5FA', PROSPECCION:'#34D399', LINKEDIN:'#C084FC', LLAMADA:'#FB923C', INBOUND:'#2DD4BF', REFERIDO:'#F472B6' };
   const counts = {};
   reus.forEach(r => { if(r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
-  const total = Object.values(counts).reduce((s,v)=>s+v, 0);
+  const total = Object.values(counts).reduce((s,v)=>s+v,0);
   if (canalChartInst) { canalChartInst.destroy(); canalChartInst = null; }
   const legend = document.getElementById('canal-legend');
   if (!total) {
@@ -1112,22 +1191,79 @@ function renderCanalChart(reus) {
   const colors  = labels.map(l => canalColors[l]||'#9CA3AF');
   canalChartInst = new Chart(document.getElementById('canal-chart'), {
     type: 'doughnut',
-    data: { labels, datasets:[{ data, backgroundColor:colors.map(c=>c+'88'), borderColor:colors, borderWidth:2, hoverOffset:4 }] },
-    options: {
-      responsive:true, maintainAspectRatio:false, cutout:'62%',
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/total*100)}%)`}}
+    data: { labels, datasets:[{ data, backgroundColor:colors.map(c=>c+'66'), borderColor:colors, borderWidth:2, hoverOffset:6 }] },
+    options: { ...CHART_DEFAULTS, cutout:'65%',
+      plugins: {
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label:ctx=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/total*100)}%)` } }
       }
     }
   });
   legend.innerHTML = entries.map(([k,v])=>`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
-      <div style="width:10px;height:10px;border-radius:50%;background:${canalColors[k]||'#9CA3AF'};flex-shrink:0;"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <div style="width:8px;height:8px;border-radius:50%;background:${canalColors[k]||'#9CA3AF'};flex-shrink:0;"></div>
       <span style="font-size:12px;color:var(--text);flex:1;">${k}</span>
-      <strong style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text);">${v}</strong>
-      <span style="font-size:11px;color:var(--muted);min-width:32px;text-align:right;">${Math.round(v/total*100)}%</span>
+      <strong style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text);">${v}</strong>
+      <span style="font-size:10px;color:var(--muted);min-width:32px;text-align:right;">${Math.round(v/total*100)}%</span>
     </div>`).join('');
+}
+
+function renderReuSdrChart(reus) {
+  if (reuSdrChartInst) { reuSdrChartInst.destroy(); reuSdrChartInst = null; }
+  const canvas = document.getElementById('reu-sdr-chart');
+  const sdrNames = ['Leandro','Grace','Carmen','Luziana'].filter(s=>reus.some(r=>r.sdr===s));
+  if (!reus.length || !sdrNames.length) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
+    return;
+  }
+  const realizadas = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada==='SI').length);
+  const todavia    = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada==='TODAVIA').length);
+  const pendiente  = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada!=='SI'&&r.realizada!=='TODAVIA').length);
+  reuSdrChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: sdrNames,
+      datasets: [
+        { label:'Realizadas', data:realizadas, backgroundColor:'#34D39966', borderColor:'#34D399', borderWidth:1.5, borderRadius:3 },
+        { label:'Todavía',    data:todavia,    backgroundColor:'#FB923C66', borderColor:'#FB923C', borderWidth:1.5, borderRadius:3 },
+        { label:'Pendiente',  data:pendiente,  backgroundColor:'#9CA3AF33', borderColor:'#9CA3AF', borderWidth:1.5, borderRadius:3 },
+      ]
+    },
+    options: { ...CHART_DEFAULTS,
+      scales: {
+        x: { stacked:true, ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+        y: { stacked:true, ticks:{ font:{size:10}, color:'#6B7280' }, grid:{ color:'rgba(255,255,255,0.04)' } },
+      },
+      plugins: {
+        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'var(--text)', boxWidth:10, padding:12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}` } }
+      }
+    }
+  });
+}
+
+function renderFunnel(contactados, respuestas, reuniones, realizadas, cotizaciones, won) {
+  const steps = [
+    { label:'Contactados', val:contactados, color:'#60A5FA' },
+    { label:'Respuestas',  val:respuestas,  color:'#818CF8' },
+    { label:'Reuniones',   val:reuniones,   color:'#34D399' },
+    { label:'Realizadas',  val:realizadas,  color:'#2DD4BF' },
+    { label:'Cotizaciones',val:cotizaciones,color:'#FB923C' },
+    { label:'WON',         val:won,         color:'#4ADE80' },
+  ];
+  const max = contactados || 1;
+  document.getElementById('funnel-wrap').innerHTML = steps.map((s,i) => {
+    const pct = Math.round(s.val/max*100);
+    const convPct = i > 0 && steps[i-1].val ? Math.round(s.val/steps[i-1].val*100) : null;
+    return `<div class="funnel-row">
+      <div class="funnel-label">${s.label}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar" style="width:${Math.max(pct,s.val>0?3:0)}%;background:${s.color}55;border-left:3px solid ${s.color};"></div>
+        <span class="funnel-val">${s.val.toLocaleString()}</span>
+      </div>
+      <div class="funnel-pct">${convPct!==null?convPct+'%':''}</div>
+    </div>`;
+  }).join('');
 }
 
 // ─── MI PANEL (EDITABLE) ─────────────────────────────────────
