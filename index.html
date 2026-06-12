@@ -393,7 +393,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="fg"><label>SDR</label><select id="nr-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select></div>
       <div class="fg"><label>Empresa</label><input type="text" id="nr-empresa" placeholder="Nombre de la empresa"></div>
       <div class="fg"><label>País</label><select id="nr-pais"><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select></div>
-      <div class="fg"><label>Canal</label><select id="nr-canal"><option>REPLY</option><option>PROSPECCION</option><option>LINKEDIN</option><option>LLAMADA</option><option>INBOUND</option></select></div>
+      <div class="fg"><label>Canal</label><select id="nr-canal">
+        <option value="REPLY">REPLY</option>
+        <option value="INBOUND">INBOUND</option>
+        <option value="LinkedIn">LinkedIn</option>
+        <option value="Correo">Correo</option>
+        <option value="Llamada">Llamada</option>
+        <option value="WhatsApp">WhatsApp</option>
+        <option value="Otros">Otros</option>
+      </select></div>
       <div class="fg"><label>¿Se realizó?</label><select id="nr-realizada"><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select></div>
       <div class="fg"><label>¿Salió cotización?</label><select id="nr-cot"><option value="SI">Sí</option><option value="NO">No</option></select></div>
       <div class="fg"><label>Estado</label><select id="nr-estado"><option value="">En proceso</option><option value="HOT">HOT</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="PENDIENTE">Pendiente</option></select></div>
@@ -1175,7 +1183,11 @@ function renderSdrCanalChart(recs) {
 }
 
 function renderCanalChart(reus) {
-  const canalColors = { REPLY:'#60A5FA', PROSPECCION:'#34D399', LINKEDIN:'#C084FC', LLAMADA:'#FB923C', INBOUND:'#2DD4BF', REFERIDO:'#F472B6' };
+  const canalColors = {
+    REPLY:'#60A5FA', INBOUND:'#2DD4BF',
+    LinkedIn:'#C084FC', Correo:'#60A5FA', Llamada:'#FB923C', WhatsApp:'#34D399', Otros:'#9CA3AF',
+    PROSPECCION:'#34D399', LLAMADA:'#FB923C', LINKEDIN:'#C084FC',
+  };
   const counts = {};
   reus.forEach(r => { if(r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
   const total = Object.values(counts).reduce((s,v)=>s+v,0);
