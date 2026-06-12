@@ -1865,7 +1865,7 @@ ${period==='month' && semanasData.length ? `<div class="section">
   // También enviar por correo si hay destinatarios configurados
   const emails = getReporteEmails();
   if (emails.length) {
-    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
+    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, html);
   }
 }
 
@@ -2220,7 +2220,7 @@ function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, cur
 </div></body></html>`;
 }
 
-async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
+async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, prebuiltHtml) {
   const emails = getReporteEmails();
   if (!emails.length) return;
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2228,7 +2228,7 @@ async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, cu
     ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear}`
     : `${MESES[curMonth-1]} ${curYear}`;
   const subject     = `Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`;
-  const htmlContent = buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
+  const htmlContent = prebuiltHtml || buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST', mode: 'no-cors',
