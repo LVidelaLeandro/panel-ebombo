@@ -129,6 +129,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .chart-wrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin-bottom:1.5rem;}
 .chart-inner{position:relative;width:100%;height:200px;}
 
+/* EMAIL MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--s2);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:min(480px,94vw);max-height:90vh;overflow-y:auto;}
+.modal-box h3{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin:0 0 .25rem;}
+.modal-box .modal-sub{font-size:11px;color:var(--muted);margin-bottom:1.25rem;}
+.email-chip{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin-bottom:8px;font-size:12px;}
+.email-chip span{flex:1;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.email-chip button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
+.email-chip button:hover{color:#F87171;}
+.email-add-row{display:flex;gap:8px;margin-top:.75rem;}
+.email-add-row input{flex:1;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:'DM Mono',monospace;outline:none;}
+.email-add-row input:focus{border-color:var(--border2);}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:1.25rem;}
+
 /* RANK CARDS */
 .rank-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem;}
 .rcard{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:1rem;text-align:center;}
@@ -216,6 +231,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="loadData()">↻ Actualizar</button>
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
+    <button class="btn-sm" onclick="openEmailModal()" style="color:#F472B6;border-color:#4B1D3F;">✉️ Destinatarios</button>
   </div>
   <div class="cards" id="d-cards"></div>
   <div class="stitle" style="margin-top:.5rem;">📈 Actividad por día</div>
@@ -227,7 +243,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div id="canal-legend" style="flex:1;"></div>
     </div>
   </div>
-  <div class="stitle">👥 Por SDR</div>
+  <div class="stitle">👥 Actividad por persona y canal</div>
+  <div class="chart-wrap"><div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart" role="img" aria-label="Actividad por persona y canal"></canvas></div></div>
   <div class="twrap"><table><thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th><th>Canal top</th></tr></thead><tbody id="d-sdr-tbl"></tbody></table></div>
   <div class="stitle">🌎 Por país</div>
   <div class="twrap"><table><thead><tr><th>País</th><th>Contactados</th><th>Respuestas</th><th>Tasa resp.</th><th>Reuniones</th><th>Canal top</th></tr></thead><tbody id="d-pais-tbl"></tbody></table></div>
@@ -302,6 +319,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="exportCSV()">CSV</button>
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
+    <button class="btn-sm" onclick="openEmailModal()" style="color:#F472B6;border-color:#4B1D3F;">✉️ Destinatarios</button>
   </div>
   <div class="twrap"><table><thead><tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Respuestas</th><th>Positivas</th><th>Reuniones</th><th>Tasa</th><th>Notas</th></tr></thead><tbody id="h-tbl"></tbody></table></div>
 </section>
@@ -429,6 +447,7 @@ let miPeriod = '2026-06';
 let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
 let chartInst = null;
 let canalChartInst = null;
+let sdrCanalChartInst = null;
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -951,6 +970,7 @@ function renderDash() {
   document.getElementById('d-pais-tbl').innerHTML = paisRows;
 
   renderChart(recs);
+  renderSdrCanalChart(recs, paisF, perF);
 
   // Gráfico de origen de reuniones (filtrado por sdr/país/período)
   const now3 = new Date();
@@ -994,6 +1014,67 @@ function renderChart(recs) {
       scales:{
         x:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}},
         y:{ticks:{font:{size:10},color:'#6B7280'},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+}
+
+function renderSdrCanalChart(recs, paisF, perF) {
+  const CANAL_COLORS = {
+    'Email':    {bg:'#60A5FA55', border:'#60A5FA'},
+    'LinkedIn': {bg:'#C084FC55', border:'#C084FC'},
+    'Llamada':  {bg:'#FB923C55', border:'#FB923C'},
+    'WhatsApp': {bg:'#34D39955', border:'#34D399'},
+    'Otros':    {bg:'#9CA3AF55', border:'#9CA3AF'},
+  };
+  const SDRS_LIST = ['Leandro','Grace','Carmen'];
+  const allCanals = Object.keys(CANAL_COLORS);
+
+  // Build per-SDR per-canal contactados totals
+  const data = {};
+  SDRS_LIST.forEach(sdr => { data[sdr] = {}; allCanals.forEach(c => data[sdr][c] = 0); });
+  recs.forEach(r => {
+    const sdr = r.sdr;
+    if (!SDRS_LIST.includes(sdr)) return;
+    const canal = allCanals.includes(r.canal) ? r.canal : 'Otros';
+    data[sdr][canal] += n(r.contactados);
+  });
+
+  const canvas = document.getElementById('sdr-canal-chart');
+  if (sdrCanalChartInst) { sdrCanalChartInst.destroy(); sdrCanalChartInst = null; }
+
+  const hasData = SDRS_LIST.some(s => allCanals.some(c => data[s][c] > 0));
+  if (!hasData) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos para mostrar</p>';
+    return;
+  }
+
+  const datasets = allCanals.map(canal => ({
+    label: canal,
+    data: SDRS_LIST.map(sdr => data[sdr][canal]),
+    backgroundColor: CANAL_COLORS[canal].bg,
+    borderColor: CANAL_COLORS[canal].border,
+    borderWidth: 1.5,
+    borderRadius: 3,
+  }));
+
+  sdrCanalChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: SDRS_LIST, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, ticks: { font:{size:12}, color:'var(--text)' }, grid: { display: false } },
+        y: { stacked: true, ticks: { font:{size:10}, color:'#6B7280' }, grid: { color:'rgba(255,255,255,0.04)' } },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { font:{size:11}, color:'var(--text)', boxWidth:12, padding:14 }
+        },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}` } }
       }
     }
   });
@@ -1691,6 +1772,49 @@ ${campPeriod.length ? `<table>
     download: fname
   });
   a.click();
+
+  // Enviar por correo si hay destinatarios configurados
+  const emails = getReporteEmails();
+  if (!emails.length) return;
+
+  const tAll = agg(actRecs);
+  const labelPeriod = period === 'week'
+    ? `Semana ${curSemana} / ${curMonth}/${curYear} (${weekStart} → ${weekEnd})`
+    : `${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][curMonth-1]} ${curYear}`;
+
+  const sdrLines = ['Leandro','Grace','Carmen'].map(sdr => {
+    const sr = actRecs.filter(r => r.sdr === sdr);
+    const s  = agg(sr);
+    const c  = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
+    return `  • ${sdr}: ${s.contactados.toLocaleString()} contactados | ${s.reuniones} reuniones | conv. ${c}%`;
+  }).join('\n');
+
+  const subject = encodeURIComponent(`Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`);
+  const body = encodeURIComponent(
+`Hola,
+
+Adjunto el reporte ${period==='week'?'semanal':'mensual'} del equipo SDR eBombo.
+
+Período: ${labelPeriod}
+
+RESUMEN DEL EQUIPO
+  Total contactados : ${tAll.contactados.toLocaleString()}
+  Total respuestas  : ${tAll.respuestas}
+  Total reuniones   : ${tAll.reuniones}
+  Reuniones / período: ${periodReus.length}
+
+POR PERSONA
+${sdrLines}
+
+El reporte completo está adjunto en el archivo ${fname}.
+
+Saludos,
+Panel SDR eBombo`
+  );
+
+  setTimeout(() => {
+    window.location.href = `mailto:${emails.join(',')}?subject=${subject}&body=${body}`;
+  }, 600);
 }
 
 // ─── NAV ─────────────────────────────────────────────────────
@@ -1924,8 +2048,86 @@ function deleteCamp(id) {
   renderCamps();
 }
 
+// ─── DESTINATARIOS DE REPORTE ────────────────────────────────
+function getReporteEmails() {
+  try { return JSON.parse(localStorage.getItem('ebombo_reporte_emails')||'[]'); } catch(e){ return []; }
+}
+function saveReporteEmails(list) {
+  localStorage.setItem('ebombo_reporte_emails', JSON.stringify(list));
+}
+
+function openEmailModal() {
+  renderEmailList();
+  document.getElementById('email-modal').classList.add('open');
+  document.getElementById('email-new-input').value = '';
+}
+function closeEmailModal() {
+  document.getElementById('email-modal').classList.remove('open');
+}
+
+function renderEmailList() {
+  const list = getReporteEmails();
+  const container = document.getElementById('email-list');
+  if (!list.length) {
+    container.innerHTML = '<p style="font-size:12px;color:var(--muted);padding:.5rem 0;">Sin destinatarios. Agregá uno abajo.</p>';
+    return;
+  }
+  container.innerHTML = list.map((em, i) => `
+    <div class="email-chip">
+      <span title="${em}">${em}</span>
+      <button onclick="removeEmail(${i})" title="Quitar">✕</button>
+    </div>`).join('');
+}
+
+function addEmail() {
+  const input = document.getElementById('email-new-input');
+  const val = input.value.trim().toLowerCase();
+  if (!val) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+    input.style.borderColor = '#F87171';
+    setTimeout(() => input.style.borderColor = '', 1500);
+    return;
+  }
+  const list = getReporteEmails();
+  if (list.includes(val)) { input.value = ''; return; }
+  list.push(val);
+  saveReporteEmails(list);
+  input.value = '';
+  renderEmailList();
+}
+
+function removeEmail(idx) {
+  const list = getReporteEmails();
+  list.splice(idx, 1);
+  saveReporteEmails(list);
+  renderEmailList();
+}
+
+// Allow Enter key to add email
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('email-new-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addEmail(); }
+  });
+});
+
 // ─── START ───────────────────────────────────────────────────
 init();
 </script>
+
+<!-- Modal destinatarios -->
+<div class="modal-overlay" id="email-modal" onclick="if(event.target===this)closeEmailModal()">
+  <div class="modal-box">
+    <h3>✉️ Destinatarios del reporte</h3>
+    <p class="modal-sub">Al generar un reporte se descargará el archivo y se abrirá tu cliente de correo con estos destinatarios listos para enviar.</p>
+    <div id="email-list"></div>
+    <div class="email-add-row">
+      <input id="email-new-input" type="email" placeholder="nombre@empresa.com">
+      <button class="btn-sm" onclick="addEmail()" style="color:var(--green);border-color:var(--green-border);">+ Agregar</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm" onclick="closeEmailModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
