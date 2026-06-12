@@ -265,11 +265,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart"></canvas></div>
     </div>
     <div class="chart-wrap">
-      <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>Origen de reuniones</div>
-      <div style="display:flex;gap:1.5rem;align-items:center;height:220px;">
-        <div style="position:relative;width:180px;height:180px;flex-shrink:0;"><canvas id="canal-chart"></canvas></div>
-        <div id="canal-legend" style="flex:1;"></div>
-      </div>
+      <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>Origen de reuniones — por canal</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="canal-chart"></canvas></div>
     </div>
   </div>
 
@@ -1157,41 +1154,55 @@ function renderSdrCanalChart(recs) {
 }
 
 function renderCanalChart(reus) {
-  const canalColors = {
+  const CANAL_ORDER  = ['REPLY','INBOUND','LinkedIn','Correo','Llamada','WhatsApp','Otros','PROSPECCION','LLAMADA','LINKEDIN'];
+  const CANAL_COLORS = {
     REPLY:'#60A5FA', INBOUND:'#2DD4BF',
-    LinkedIn:'#C084FC', Correo:'#60A5FA', Llamada:'#FB923C', WhatsApp:'#34D399', Otros:'#9CA3AF',
+    LinkedIn:'#C084FC', Correo:'#38BDF8', Llamada:'#FB923C', WhatsApp:'#34D399', Otros:'#9CA3AF',
     PROSPECCION:'#34D399', LLAMADA:'#FB923C', LINKEDIN:'#C084FC',
   };
   const counts = {};
-  reus.forEach(r => { if(r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
-  const total = Object.values(counts).reduce((s,v)=>s+v,0);
+  reus.forEach(r => { if (r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
+  const total = Object.values(counts).reduce((s,v)=>s+v, 0);
   if (canalChartInst) { canalChartInst.destroy(); canalChartInst = null; }
-  const legend = document.getElementById('canal-legend');
+  const canvas = document.getElementById('canal-chart');
   if (!total) {
-    legend.innerHTML = '<p style="color:var(--muted);font-size:12px;padding:.5rem 0;">Sin reuniones para este filtro</p>';
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
     return;
   }
-  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-  const labels  = entries.map(([k])=>k);
-  const data    = entries.map(([,v])=>v);
-  const colors  = labels.map(l => canalColors[l]||'#9CA3AF');
-  canalChartInst = new Chart(document.getElementById('canal-chart'), {
-    type: 'doughnut',
-    data: { labels, datasets:[{ data, backgroundColor:colors.map(c=>c+'66'), borderColor:colors, borderWidth:2, hoverOffset:6 }] },
-    options: { ...CHART_DEFAULTS, cutout:'65%',
+  const entries = [
+    ...CANAL_ORDER.filter(k => counts[k]),
+    ...Object.keys(counts).filter(k => !CANAL_ORDER.includes(k))
+  ].map(k => [k, counts[k]]);
+
+  const labels = entries.map(([k]) => k);
+  const data   = entries.map(([,v]) => v);
+  const colors = labels.map(l => CANAL_COLORS[l] || '#9CA3AF');
+
+  canalChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + '55'),
+        borderColor: colors,
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: { ...CHART_DEFAULTS,
+      indexAxis: 'y',
+      scales: {
+        x: { beginAtZero:true, ticks:{ font:{size:10}, color:'#6B7280', stepSize:1 }, grid:{ color:'rgba(255,255,255,0.04)' } },
+        y: { ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+      },
       plugins: {
-        legend:{ display:false },
-        tooltip:{ callbacks:{ label:ctx=>` ${ctx.label}: ${ctx.parsed} (${Math.round(ctx.parsed/total*100)}%)` } }
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)` } }
       }
     }
   });
-  legend.innerHTML = entries.map(([k,v])=>`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <div style="width:8px;height:8px;border-radius:50%;background:${canalColors[k]||'#9CA3AF'};flex-shrink:0;"></div>
-      <span style="font-size:12px;color:var(--text);flex:1;">${k}</span>
-      <strong style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text);">${v}</strong>
-      <span style="font-size:10px;color:var(--muted);min-width:32px;text-align:right;">${Math.round(v/total*100)}%</span>
-    </div>`).join('');
 }
 
 function renderReuSdrChart(reus) {
