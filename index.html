@@ -6,7 +6,6 @@
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 :root {
   --bg:#030712; --s1:#0F172A; --s2:#111827; --s3:#1F2937;
@@ -1788,7 +1787,7 @@ ${campPeriod.length ? `<table>
   const emails  = getReporteEmails();
   const ejsCfg  = getEmailJSConfig();
 
-  if (emails.length && ejsCfg?.publicKey) {
+  if (emails.length) {
     sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
   } else {
     const a = Object.assign(document.createElement('a'), {
@@ -1796,9 +1795,6 @@ ${campPeriod.length ? `<table>
       download: fname
     });
     a.click();
-    if (emails.length && !ejsCfg?.publicKey) {
-      setTimeout(() => alert('Configurá EmailJS en "✉️ Destinatarios" para enviar por correo directamente.'), 500);
-    }
   }
 }
 
@@ -2047,18 +2043,8 @@ function getReporteEmails() {
   try { return JSON.parse(localStorage.getItem('ebombo_reporte_emails')||'[]'); } catch(e){ return []; }
 }
 function saveReporteEmails(list) { localStorage.setItem('ebombo_reporte_emails', JSON.stringify(list)); }
-function getEmailJSConfig() {
-  try { return JSON.parse(localStorage.getItem('ebombo_emailjs_config')||'null'); } catch(e){ return null; }
-}
-function saveEmailJSConfig(cfg) { localStorage.setItem('ebombo_emailjs_config', JSON.stringify(cfg)); }
-
 function openEmailModal() {
   renderEmailList();
-  const cfg = getEmailJSConfig();
-  document.getElementById('ejs-pubkey').value   = cfg?.publicKey   || '';
-  document.getElementById('ejs-service').value  = cfg?.serviceId   || '';
-  document.getElementById('ejs-template').value = cfg?.templateId  || '';
-  updateEjsStatus();
   document.getElementById('email-modal').classList.add('open');
   document.getElementById('email-new-input').value = '';
 }
@@ -2099,26 +2085,6 @@ function removeEmail(idx) {
   saveReporteEmails(list);
   renderEmailList();
 }
-function saveEmailModalConfig() {
-  const publicKey  = document.getElementById('ejs-pubkey').value.trim();
-  const serviceId  = document.getElementById('ejs-service').value.trim();
-  const templateId = document.getElementById('ejs-template').value.trim();
-  if (!publicKey || !serviceId || !templateId) {
-    alert('Completá los tres campos para guardar la configuración.');
-    return;
-  }
-  saveEmailJSConfig({ publicKey, serviceId, templateId });
-  updateEjsStatus();
-}
-function updateEjsStatus() {
-  const cfg = getEmailJSConfig();
-  const el = document.getElementById('ejs-status');
-  if (!el) return;
-  el.innerHTML = (cfg?.publicKey && cfg?.serviceId && cfg?.templateId)
-    ? '<span style="font-size:11px;color:#34D399;">✓ Configurado</span>'
-    : '<span style="font-size:11px;color:#F87171;">Sin configurar</span>';
-}
-
 function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
   const tAll = agg(actRecs);
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -2166,24 +2132,23 @@ function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, cur
 }
 
 async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
-  const cfg    = getEmailJSConfig();
   const emails = getReporteEmails();
-  if (!cfg || !emails.length) return;
+  if (!emails.length) return;
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const labelPeriod = period === 'week'
     ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear}`
     : `${MESES[curMonth-1]} ${curYear}`;
   const subject     = `Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`;
   const htmlContent = buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
-  emailjs.init(cfg.publicKey);
   try {
-    await Promise.all(emails.map(toEmail =>
-      emailjs.send(cfg.serviceId, cfg.templateId, { to_email: toEmail, subject, message: htmlContent })
-    ));
+    await fetch(SCRIPT_URL, {
+      method: 'POST', mode: 'no-cors',
+      body: JSON.stringify({ action: 'sendEmail', recipients: emails, subject, htmlBody: htmlContent })
+    });
     alert(`✅ Reporte enviado a ${emails.length} destinatario${emails.length > 1 ? 's' : ''}.`);
   } catch(err) {
-    console.error('EmailJS error:', err);
-    alert('Error al enviar. Revisá la configuración de EmailJS en "✉️ Destinatarios".');
+    console.error('Error enviando reporte:', err);
+    alert('Error al enviar el reporte por correo.');
   }
 }
 
@@ -2197,38 +2162,16 @@ document.addEventListener('DOMContentLoaded', () => {
 init();
 </script>
 
-<!-- Modal destinatarios + EmailJS -->
+<!-- Modal destinatarios -->
 <div class="modal-overlay" id="email-modal" onclick="if(event.target===this)closeEmailModal()">
   <div class="modal-box">
-    <h3>✉️ Envío de reportes por correo</h3>
-    <p class="modal-sub">Conectá tu correo con EmailJS y agregá destinatarios. Al generar el reporte se enviará directamente sin necesidad de descargar.</p>
-
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:.6rem;">Destinatarios</div>
+    <h3>✉️ Destinatarios del reporte</h3>
+    <p class="modal-sub">El reporte se envía directamente desde tu Gmail (vía Google Apps Script). Agregá los correos a los que querés enviarlo.</p>
     <div id="email-list"></div>
     <div class="email-add-row">
       <input id="email-new-input" type="email" placeholder="nombre@empresa.com">
       <button class="btn-sm" onclick="addEmail()" style="color:var(--green);border-color:var(--green-border);">+ Agregar</button>
     </div>
-
-    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;">
-        <span style="font-size:12px;font-weight:600;color:var(--text);">⚙️ Conexión de correo (EmailJS)</span>
-        <span id="ejs-status"></span>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:.85rem;line-height:1.6;">
-        1. Registrate gratis en <strong style="color:var(--text);">emailjs.com</strong><br>
-        2. Conectá tu Gmail/Outlook en <em>Email Services</em><br>
-        3. Creá un template con variables: <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{to_email}}</code> · <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{subject}}</code> · <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{message}}</code><br>
-        4. Pegá las credenciales abajo y guardá:
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <input id="ejs-pubkey"   class="ejs-input" type="text" placeholder="Public Key  (ej: abc123XYZ...)">
-        <input id="ejs-service"  class="ejs-input" type="text" placeholder="Service ID  (ej: service_xxxxxx)">
-        <input id="ejs-template" class="ejs-input" type="text" placeholder="Template ID (ej: template_xxxxxx)">
-      </div>
-      <button class="btn-sm" onclick="saveEmailModalConfig()" style="margin-top:.75rem;color:var(--blue);border-color:#1E3A5F;">Guardar configuración</button>
-    </div>
-
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeEmailModal()">Cerrar</button>
     </div>

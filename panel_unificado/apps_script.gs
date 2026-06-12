@@ -33,10 +33,11 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     let result;
-    if      (body.action === 'add')     result = addRegistro(body.record);
-    else if (body.action === 'saveMi')  result = saveMiPanel(body.sdr, body.period, body.out, body.ib);
-    else if (body.action === 'addCamp') result = addCampRegistro(body.camp);
-    else if (body.action === 'addReu')  result = addReuRegistro(body.reu);
+    if      (body.action === 'add')       result = addRegistro(body.record);
+    else if (body.action === 'saveMi')    result = saveMiPanel(body.sdr, body.period, body.out, body.ib);
+    else if (body.action === 'addCamp')   result = addCampRegistro(body.camp);
+    else if (body.action === 'addReu')    result = addReuRegistro(body.reu);
+    else if (body.action === 'sendEmail') result = sendReporteEmail(body.recipients, body.subject, body.htmlBody);
     else result = { ok: false, error: 'Acción no reconocida' };
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -46,6 +47,26 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ─── ENVÍO DE REPORTES POR EMAIL ──────────────────────
+function sendReporteEmail(recipients, subject, htmlBody) {
+  if (!recipients || !recipients.length) return { ok: false, error: 'Sin destinatarios' };
+  if (!subject || !htmlBody) return { ok: false, error: 'Faltan datos del email' };
+  var errors = [];
+  recipients.forEach(function(email) {
+    try {
+      MailApp.sendEmail({
+        to:       email,
+        subject:  subject,
+        htmlBody: htmlBody,
+      });
+    } catch(err) {
+      errors.push(email + ': ' + err.message);
+    }
+  });
+  if (errors.length) return { ok: false, error: errors.join(' | ') };
+  return { ok: true, sent: recipients.length };
 }
 
 // ─── REGISTROS ────────────────────────────────────────
