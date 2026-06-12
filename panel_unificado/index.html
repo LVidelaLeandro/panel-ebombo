@@ -6,6 +6,7 @@
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 :root {
   --bg:#030712; --s1:#0F172A; --s2:#111827; --s3:#1F2937;
@@ -143,6 +144,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .email-add-row input{flex:1;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;color:var(--text);font-family:'DM Mono',monospace;outline:none;}
 .email-add-row input:focus{border-color:var(--border2);}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:1.25rem;}
+.ejs-input{width:100%;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11px;color:var(--text);font-family:'DM Mono',monospace;outline:none;margin-bottom:0;}
+.ejs-input:focus{border-color:var(--border2);}
+.ejs-input::placeholder{color:var(--muted2);}
 
 /* RANK CARDS */
 .rank-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem;}
@@ -1766,55 +1770,22 @@ ${campPeriod.length ? `<table>
 <div class="footer">Panel SDR eBombo &nbsp;·&nbsp; Reporte generado el ${now.toISOString()} &nbsp;·&nbsp; ${period==='week'?'Reporte Semanal':'Reporte Mensual'}</div>
 </body></html>`;
 
-  const fname = `reporte_${period==='week'?'semana':'mes'}_${fmtD(now)}.html`;
-  const a = Object.assign(document.createElement('a'),{
-    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
-    download: fname
-  });
-  a.click();
+  const fname   = `reporte_${period==='week'?'semana':'mes'}_${fmtD(now)}.html`;
+  const emails  = getReporteEmails();
+  const ejsCfg  = getEmailJSConfig();
 
-  // Enviar por correo si hay destinatarios configurados
-  const emails = getReporteEmails();
-  if (!emails.length) return;
-
-  const tAll = agg(actRecs);
-  const labelPeriod = period === 'week'
-    ? `Semana ${curSemana} / ${curMonth}/${curYear} (${weekStart} → ${weekEnd})`
-    : `${['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][curMonth-1]} ${curYear}`;
-
-  const sdrLines = ['Leandro','Grace','Carmen'].map(sdr => {
-    const sr = actRecs.filter(r => r.sdr === sdr);
-    const s  = agg(sr);
-    const c  = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
-    return `  • ${sdr}: ${s.contactados.toLocaleString()} contactados | ${s.reuniones} reuniones | conv. ${c}%`;
-  }).join('\n');
-
-  const subject = encodeURIComponent(`Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`);
-  const body = encodeURIComponent(
-`Hola,
-
-Adjunto el reporte ${period==='week'?'semanal':'mensual'} del equipo SDR eBombo.
-
-Período: ${labelPeriod}
-
-RESUMEN DEL EQUIPO
-  Total contactados : ${tAll.contactados.toLocaleString()}
-  Total respuestas  : ${tAll.respuestas}
-  Total reuniones   : ${tAll.reuniones}
-  Reuniones / período: ${periodReus.length}
-
-POR PERSONA
-${sdrLines}
-
-El reporte completo está adjunto en el archivo ${fname}.
-
-Saludos,
-Panel SDR eBombo`
-  );
-
-  setTimeout(() => {
-    window.location.href = `mailto:${emails.join(',')}?subject=${subject}&body=${body}`;
-  }, 600);
+  if (emails.length && ejsCfg?.publicKey) {
+    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
+  } else {
+    const a = Object.assign(document.createElement('a'), {
+      href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
+      download: fname
+    });
+    a.click();
+    if (emails.length && !ejsCfg?.publicKey) {
+      setTimeout(() => alert('Configurá EmailJS en "✉️ Destinatarios" para enviar por correo directamente.'), 500);
+    }
+  }
 }
 
 // ─── NAV ─────────────────────────────────────────────────────
@@ -2052,18 +2023,23 @@ function deleteCamp(id) {
 function getReporteEmails() {
   try { return JSON.parse(localStorage.getItem('ebombo_reporte_emails')||'[]'); } catch(e){ return []; }
 }
-function saveReporteEmails(list) {
-  localStorage.setItem('ebombo_reporte_emails', JSON.stringify(list));
+function saveReporteEmails(list) { localStorage.setItem('ebombo_reporte_emails', JSON.stringify(list)); }
+function getEmailJSConfig() {
+  try { return JSON.parse(localStorage.getItem('ebombo_emailjs_config')||'null'); } catch(e){ return null; }
 }
+function saveEmailJSConfig(cfg) { localStorage.setItem('ebombo_emailjs_config', JSON.stringify(cfg)); }
 
 function openEmailModal() {
   renderEmailList();
+  const cfg = getEmailJSConfig();
+  document.getElementById('ejs-pubkey').value   = cfg?.publicKey   || '';
+  document.getElementById('ejs-service').value  = cfg?.serviceId   || '';
+  document.getElementById('ejs-template').value = cfg?.templateId  || '';
+  updateEjsStatus();
   document.getElementById('email-modal').classList.add('open');
   document.getElementById('email-new-input').value = '';
 }
-function closeEmailModal() {
-  document.getElementById('email-modal').classList.remove('open');
-}
+function closeEmailModal() { document.getElementById('email-modal').classList.remove('open'); }
 
 function renderEmailList() {
   const list = getReporteEmails();
@@ -2078,7 +2054,6 @@ function renderEmailList() {
       <button onclick="removeEmail(${i})" title="Quitar">✕</button>
     </div>`).join('');
 }
-
 function addEmail() {
   const input = document.getElementById('email-new-input');
   const val = input.value.trim().toLowerCase();
@@ -2095,15 +2070,100 @@ function addEmail() {
   input.value = '';
   renderEmailList();
 }
-
 function removeEmail(idx) {
   const list = getReporteEmails();
   list.splice(idx, 1);
   saveReporteEmails(list);
   renderEmailList();
 }
+function saveEmailModalConfig() {
+  const publicKey  = document.getElementById('ejs-pubkey').value.trim();
+  const serviceId  = document.getElementById('ejs-service').value.trim();
+  const templateId = document.getElementById('ejs-template').value.trim();
+  if (!publicKey || !serviceId || !templateId) {
+    alert('Completá los tres campos para guardar la configuración.');
+    return;
+  }
+  saveEmailJSConfig({ publicKey, serviceId, templateId });
+  updateEjsStatus();
+}
+function updateEjsStatus() {
+  const cfg = getEmailJSConfig();
+  const el = document.getElementById('ejs-status');
+  if (!el) return;
+  el.innerHTML = (cfg?.publicKey && cfg?.serviceId && cfg?.templateId)
+    ? '<span style="font-size:11px;color:#34D399;">✓ Configurado</span>'
+    : '<span style="font-size:11px;color:#F87171;">Sin configurar</span>';
+}
 
-// Allow Enter key to add email
+function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
+  const tAll = agg(actRecs);
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const labelPeriod = period === 'week'
+    ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear} (${weekStart} → ${weekEnd})`
+    : `${MESES[curMonth-1]} ${curYear}`;
+  const sdrRows = ['Leandro','Grace','Carmen'].map(sdr => {
+    const s = agg(actRecs.filter(r => r.sdr === sdr));
+    const c = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
+    return `<tr>
+      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;">${sdr}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${s.contactados.toLocaleString()}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${s.reuniones}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${c}%</td></tr>`;
+  }).join('');
+  return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif;">
+<div style="max-width:580px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+  <div style="background:#111827;padding:22px 28px;">
+    <p style="color:#9CA3AF;font-size:11px;margin:0 0 4px;letter-spacing:.06em;text-transform:uppercase;">eBombo SDR</p>
+    <h1 style="color:#F9FAFB;font-size:20px;margin:0 0 4px;">Reporte ${period==='week'?'Semanal':'Mensual'}</h1>
+    <p style="color:#9CA3AF;font-size:12px;margin:0;">${labelPeriod}</p>
+  </div>
+  <div style="padding:24px 28px;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:28px;background:#F9FAFB;border-radius:6px;overflow:hidden;">
+      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Contactados</td><td style="padding:10px 14px;text-align:right;font-size:20px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.contactados.toLocaleString()}</td></tr>
+      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Respuestas</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.respuestas}</td></tr>
+      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Reuniones (actividad)</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.reuniones}</td></tr>
+      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;">Reuniones del período</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;">${periodReus.length}</td></tr>
+    </table>
+    <h2 style="font-size:14px;font-weight:600;color:#374151;margin:0 0 12px;">Por persona</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#111827;">
+        <th style="padding:8px 14px;text-align:left;font-size:11px;color:#9CA3AF;font-weight:500;">SDR</th>
+        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Contactados</th>
+        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Reuniones</th>
+        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Conv.</th>
+      </tr></thead>
+      <tbody>${sdrRows}</tbody>
+    </table>
+  </div>
+  <div style="padding:12px 28px;background:#F3F4F6;font-size:11px;color:#9CA3AF;text-align:center;">
+    Panel SDR eBombo · ${now.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
+  </div>
+</div></body></html>`;
+}
+
+async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
+  const cfg    = getEmailJSConfig();
+  const emails = getReporteEmails();
+  if (!cfg || !emails.length) return;
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const labelPeriod = period === 'week'
+    ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear}`
+    : `${MESES[curMonth-1]} ${curYear}`;
+  const subject     = `Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`;
+  const htmlContent = buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
+  emailjs.init(cfg.publicKey);
+  try {
+    await Promise.all(emails.map(toEmail =>
+      emailjs.send(cfg.serviceId, cfg.templateId, { to_email: toEmail, subject, message: htmlContent })
+    ));
+    alert(`✅ Reporte enviado a ${emails.length} destinatario${emails.length > 1 ? 's' : ''}.`);
+  } catch(err) {
+    console.error('EmailJS error:', err);
+    alert('Error al enviar. Revisá la configuración de EmailJS en "✉️ Destinatarios".');
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('email-new-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); addEmail(); }
@@ -2114,16 +2174,38 @@ document.addEventListener('DOMContentLoaded', () => {
 init();
 </script>
 
-<!-- Modal destinatarios -->
+<!-- Modal destinatarios + EmailJS -->
 <div class="modal-overlay" id="email-modal" onclick="if(event.target===this)closeEmailModal()">
   <div class="modal-box">
-    <h3>✉️ Destinatarios del reporte</h3>
-    <p class="modal-sub">Al generar un reporte se descargará el archivo y se abrirá tu cliente de correo con estos destinatarios listos para enviar.</p>
+    <h3>✉️ Envío de reportes por correo</h3>
+    <p class="modal-sub">Conectá tu correo con EmailJS y agregá destinatarios. Al generar el reporte se enviará directamente sin necesidad de descargar.</p>
+
+    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:.6rem;">Destinatarios</div>
     <div id="email-list"></div>
     <div class="email-add-row">
       <input id="email-new-input" type="email" placeholder="nombre@empresa.com">
       <button class="btn-sm" onclick="addEmail()" style="color:var(--green);border-color:var(--green-border);">+ Agregar</button>
     </div>
+
+    <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem;">
+        <span style="font-size:12px;font-weight:600;color:var(--text);">⚙️ Conexión de correo (EmailJS)</span>
+        <span id="ejs-status"></span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:.85rem;line-height:1.6;">
+        1. Registrate gratis en <strong style="color:var(--text);">emailjs.com</strong><br>
+        2. Conectá tu Gmail/Outlook en <em>Email Services</em><br>
+        3. Creá un template con variables: <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{to_email}}</code> · <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{subject}}</code> · <code style="color:var(--blue);font-family:'DM Mono',monospace;">{{message}}</code><br>
+        4. Pegá las credenciales abajo y guardá:
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input id="ejs-pubkey"   class="ejs-input" type="text" placeholder="Public Key  (ej: abc123XYZ...)">
+        <input id="ejs-service"  class="ejs-input" type="text" placeholder="Service ID  (ej: service_xxxxxx)">
+        <input id="ejs-template" class="ejs-input" type="text" placeholder="Template ID (ej: template_xxxxxx)">
+      </div>
+      <button class="btn-sm" onclick="saveEmailModalConfig()" style="margin-top:.75rem;color:var(--blue);border-color:#1E3A5F;">Guardar configuración</button>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-sm" onclick="closeEmailModal()">Cerrar</button>
     </div>
