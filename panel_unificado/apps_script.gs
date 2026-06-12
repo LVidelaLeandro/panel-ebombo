@@ -11,9 +11,10 @@ function doGet(e) {
   const callback = e.parameter.callback || '';
   let result;
   try {
-    if      (action === 'get')    result = getRegistros();
-    else if (action === 'getMi')  result = getMiPanel(e.parameter.sdr, e.parameter.period);
-    else if (action === 'status') result = { ok: true };
+    if      (action === 'get')          result = getRegistros();
+    else if (action === 'getMi')        result = getMiPanel(e.parameter.sdr, e.parameter.period);
+    else if (action === 'getCampDaily') result = getCampDaily(e.parameter.year, e.parameter.month);
+    else if (action === 'status')       result = { ok: true };
     else result = { ok: false, error: 'Acción no reconocida' };
   } catch(err) {
     result = { ok: false, error: err.message };
@@ -37,7 +38,8 @@ function doPost(e) {
     else if (body.action === 'saveMi')    result = saveMiPanel(body.sdr, body.period, body.out, body.ib);
     else if (body.action === 'addCamp')   result = addCampRegistro(body.camp);
     else if (body.action === 'addReu')    result = addReuRegistro(body.reu);
-    else if (body.action === 'sendEmail') result = sendReporteEmail(body.recipients, body.subject, body.htmlBody);
+    else if (body.action === 'sendEmail')    result = sendReporteEmail(body.recipients, body.subject, body.htmlBody);
+    else if (body.action === 'saveCampDaily') result = saveCampDaily(body.year, body.month, body.data);
     else result = { ok: false, error: 'Acción no reconocida' };
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -47,6 +49,36 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ─── CAMPAÑAS DIARIO (contactos por día) ──────────────
+function getCampDaily(year, month) {
+  const sheet = getSheet('Campañas Diario', ['key','year','month','data','updated']);
+  const key   = year + '_' + month;
+  const rows  = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === key) {
+      try { return { ok: true, data: JSON.parse(rows[i][3]) }; }
+      catch(e) { return { ok: true, data: {} }; }
+    }
+  }
+  return { ok: true, data: {} };
+}
+
+function saveCampDaily(year, month, data) {
+  const sheet = getSheet('Campañas Diario', ['key','year','month','data','updated']);
+  const key   = year + '_' + month;
+  const ts    = new Date().toLocaleString('es-ES');
+  const json  = JSON.stringify(data);
+  const rows  = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === key) {
+      sheet.getRange(i+1, 4, 1, 2).setValues([[json, ts]]);
+      return { ok: true };
+    }
+  }
+  sheet.appendRow([key, year, month, json, ts]);
+  return { ok: true };
 }
 
 // ─── ENVÍO DE REPORTES POR EMAIL ──────────────────────

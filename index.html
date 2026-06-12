@@ -844,6 +844,7 @@ async function init() {
   setSyncStatus('spin','conectando...');
   buildMiPanel();
   await loadData();
+  loadCampDailyFromSheets();
   renderReus();
   renderRanking();
 }
@@ -1886,7 +1887,25 @@ let campViewMonth = new Date().getMonth() + 1;
 
 function getDailyKey(y, m) { return `ebombo_camps_daily_${y}_${String(m).padStart(2,'0')}`; }
 function loadDailyData(y, m) { try { return JSON.parse(localStorage.getItem(getDailyKey(y,m))||'{}'); } catch(e) { return {}; } }
-function saveDailyData(y, m, data) { localStorage.setItem(getDailyKey(y,m), JSON.stringify(data)); }
+function saveDailyDataLocal(y, m, data) { localStorage.setItem(getDailyKey(y,m), JSON.stringify(data)); }
+function saveDailyData(y, m, data) {
+  saveDailyDataLocal(y, m, data);
+  apiPost({ action: 'saveCampDaily', year: y, month: m, data: data });
+}
+function loadCampDailyFromSheets() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const months = m === 1 ? [[y-1,12],[y,m]] : [[y,m-1],[y,m]];
+  months.forEach(([year, month]) => {
+    apiFetch('getCampDaily&year='+year+'&month='+month).then(res => {
+      if (res && res.ok && res.data && Object.keys(res.data).length) {
+        saveDailyDataLocal(year, month, res.data);
+        renderCamps();
+      }
+    });
+  });
+}
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
 
 function prevCampMonth() {
