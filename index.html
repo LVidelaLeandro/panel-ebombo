@@ -1528,15 +1528,18 @@ function renderReus() {
 // ─── RANKING ─────────────────────────────────────────────────
 function renderRanking() {
   const now = new Date();
+  const curMes = now.getMonth() + 1;
+  const allReus = getAllReus().filter(r => r.mes === curMes);
+
   const stats = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
     const monthRecs = records.filter(r=>{
       const d=new Date(r.fecha);
       return r.sdr===sdr && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
     });
     const s = agg(monthRecs);
-    const rate = s.contactados ? Math.round(s.respuestas/s.contactados*100) : 0;
-    const conv = s.respuestas  ? Math.round(s.reuniones/s.respuestas*100) : 0;
-    return {...s, sdr, rate, conv};
+    const reuniones = allReus.filter(r => r.sdr===sdr).length;
+    const conv = s.contactados ? Math.round(reuniones/s.contactados*100) : 0;
+    return {...s, sdr, reuniones, conv};
   }).sort((a,b)=>b.reuniones-a.reuniones);
 
   document.getElementById('rank-cards').innerHTML = stats.map((s,i)=>`
