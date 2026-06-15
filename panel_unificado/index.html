@@ -209,8 +209,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <nav class="nav">
   <button class="ntab on"  onclick="go('dash')">Dashboard</button>
   <button class="ntab"     onclick="go('mi')">Mi Panel</button>
-  <button class="ntab"     onclick="go('reg')">Registrar</button>
-  <button class="ntab"     onclick="go('hist')">Historial</button>
   <button class="ntab"     onclick="go('reus')">Reuniones</button>
   <button class="ntab"     onclick="go('rank')">Ranking</button>
   <button class="ntab"     onclick="go('camps')">Campañas</button>
@@ -317,54 +315,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div id="mi-comp" style="display:none;"></div>
 </section>
 
-<!-- ═══════ REGISTRAR ═══════ -->
-<section id="sec-reg" class="sec">
-  <div class="alert" id="reg-ok"></div>
-  <div class="fcard">
-    <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nuevo registro diario</div>
-    <div class="fgrid" style="margin-top:1rem;">
-      <div class="fg"><label>SDR</label>
-        <select id="f-sdr">
-          <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option>
-        </select>
-      </div>
-      <div class="fg"><label>Fecha</label><input type="date" id="f-fecha"></div>
-      <div class="fg"><label>País</label>
-        <select id="f-pais"><option value="Mexico">México</option><option value="Peru">Perú</option><option value="Spain">España</option></select>
-      </div>
-      <div class="fg"><label>Canal</label>
-        <select id="f-canal"><option>Email</option><option>LinkedIn</option><option>Llamada</option><option>WhatsApp</option><option>Otros</option></select>
-      </div>
-      <div class="fg"><label>Contactados</label>
-        <div class="numrow"><button onclick="dec('f-cont')">−</button><input type="number" id="f-cont" value="0" min="0"><button onclick="inc('f-cont')">+</button></div>
-      </div>
-      <div class="fg"><label>Respuestas</label>
-        <div class="numrow"><button onclick="dec('f-resp')">−</button><input type="number" id="f-resp" value="0" min="0"><button onclick="inc('f-resp')">+</button></div>
-      </div>
-      <div class="fg"><label>Positivas</label>
-        <div class="numrow"><button onclick="dec('f-pos')">−</button><input type="number" id="f-pos" value="0" min="0"><button onclick="inc('f-pos')">+</button></div>
-      </div>
-      <div class="fg"><label>Reuniones</label>
-        <div class="numrow"><button onclick="dec('f-reus')">−</button><input type="number" id="f-reus" value="0" min="0"><button onclick="inc('f-reus')">+</button></div>
-      </div>
-      <div class="fg full"><label>Notas / Campaña</label><input type="text" id="f-notas" placeholder="Ej: PER_001 Marketing, llamadas España..."></div>
-    </div>
-    <button class="btn-primary" id="btn-guardar" onclick="guardar()">Guardar registro</button>
-  </div>
-</section>
-
-<!-- ═══════ HISTORIAL ═══════ -->
-<section id="sec-hist" class="sec">
-  <div class="filters">
-    <label>SDR</label><select id="h-sdr" onchange="renderHist()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option></select>
-    <label>País</label><select id="h-pais" onchange="renderHist()"><option value="all">Todos</option><option value="Mexico">México</option><option value="Peru">Perú</option><option value="Spain">España</option></select>
-    <button class="btn-sm" onclick="exportCSV()">CSV</button>
-    <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
-    <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
-    <button class="btn-sm" onclick="openEmailModal()" style="color:#F472B6;border-color:#4B1D3F;">✉️ Destinatarios</button>
-  </div>
-  <div class="twrap"><table><thead><tr><th>Fecha</th><th>SDR</th><th>País</th><th>Canal</th><th>Contactados</th><th>Respuestas</th><th>Positivas</th><th>Reuniones</th><th>Tasa</th><th>Notas</th></tr></thead><tbody id="h-tbl"></tbody></table></div>
-</section>
 
 <!-- ═══════ REUNIONES ═══════ -->
 <section id="sec-reus" class="sec">
@@ -874,7 +824,6 @@ async function apiPost(body) {
 async function init() {
   document.getElementById('hdr-date').textContent =
     new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
-  document.getElementById('f-fecha').value = new Date().toISOString().split('T')[0];
   setSyncStatus('spin','conectando...');
   buildMiPanel();
   await loadData();
@@ -885,7 +834,6 @@ async function init() {
 
 async function loadData() {
   setSyncStatus('spin','actualizando...');
-  const btn = document.getElementById('btn-guardar');
   const data = await apiFetch('get');
   if (data && Array.isArray(data.records)) {
     records = data.records.map(normalizeRecord);
@@ -894,7 +842,6 @@ async function loadData() {
     setSyncStatus('off','sin conexión — datos locales');
   }
   renderDash();
-  renderHist();
   renderRanking();
 }
 
@@ -1456,59 +1403,6 @@ function miTab(t) {
   if(t==='comp') renderMiComp();
 }
 
-// ─── REGISTRAR ───────────────────────────────────────────────
-async function guardar() {
-  const btn = document.getElementById('btn-guardar');
-  btn.disabled = true; btn.textContent = 'Guardando...';
-  const rec = {
-    id: Date.now(),
-    fecha: document.getElementById('f-fecha').value,
-    sdr:   document.getElementById('f-sdr').value,
-    pais:  document.getElementById('f-pais').value,
-    canal: document.getElementById('f-canal').value,
-    contactados: parseInt(document.getElementById('f-cont').value)||0,
-    respuestas:  parseInt(document.getElementById('f-resp').value)||0,
-    positivas:   parseInt(document.getElementById('f-pos').value)||0,
-    reuniones:   parseInt(document.getElementById('f-reus').value)||0,
-    notas: document.getElementById('f-notas').value,
-  };
-  if (!rec.fecha) { alert('Seleccioná la fecha'); btn.disabled=false; btn.textContent='Guardar registro'; return; }
-  records.push(rec);
-  await apiPost({action:'add', record:rec});
-  const al = document.getElementById('reg-ok');
-  al.textContent='✅ Registro guardado. Visible para todo el equipo.';
-  al.className='alert ok show';
-  setTimeout(()=>al.classList.remove('show'),5000);
-  ['f-cont','f-resp','f-pos','f-reus'].forEach(id=>document.getElementById(id).value=0);
-  document.getElementById('f-notas').value='';
-  btn.disabled=false; btn.textContent='Guardar registro';
-  renderDash(); renderHist(); renderRanking();
-}
-
-// ─── HISTORIAL ───────────────────────────────────────────────
-function renderHist() {
-  const sdrF  = document.getElementById('h-sdr').value;
-  const paisF = document.getElementById('h-pais').value;
-  const recs  = filtered(sdrF, paisF, 'all').sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if (!recs.length) {
-    document.getElementById('h-tbl').innerHTML='<tr class="empty-row"><td colspan="10">Sin registros todavía</td></tr>';
-    return;
-  }
-  document.getElementById('h-tbl').innerHTML = recs.map(r => {
-    const rate = r.contactados ? Math.round(r.respuestas/r.contactados*100) : 0;
-    return `<tr>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${r.fecha||'—'}</td>
-      <td><strong>${r.sdr||'—'}</strong></td>
-      <td>${flag(r.pais)} ${paisLabel(r.pais)}</td>
-      <td><span class="pill pb">${r.canal||'—'}</span></td>
-      <td>${n(r.contactados)}</td><td>${n(r.respuestas)}</td>
-      <td>${n(r.positivas)}</td><td><strong>${n(r.reuniones)}</strong></td>
-      <td><span class="pill ${pillClass(rate)}">${rate}%</span></td>
-      <td style="color:var(--muted);font-size:11px;">${r.notas||'—'}</td>
-    </tr>`;
-  }).join('');
-}
-
 // ─── REUNIONES ───────────────────────────────────────────────
 function filteredReus() {
   const sdrF  = document.getElementById('re-sdr').value;
@@ -1955,11 +1849,10 @@ ${period==='month' && semanasData.length ? `<div class="section">
 
 // ─── NAV ─────────────────────────────────────────────────────
 function go(t) {
-  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('on',['dash','mi','reg','hist','reus','rank'][i]===t));
+  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('on',['dash','mi','reus','rank','camps'][i]===t));
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.getElementById('sec-'+t).classList.add('on');
   if(t==='dash') renderDash();
-  if(t==='hist') renderHist();
   if(t==='rank') renderRanking();
   if(t==='reus') renderReus();
   if(t==='camps') renderCamps();
