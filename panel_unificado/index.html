@@ -359,10 +359,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <!-- ═══════ RANKING ═══════ -->
 <section id="sec-rank" class="sec">
-  <div class="stitle">🏆 Ranking del mes — reuniones agendadas</div>
+  <div class="filters">
+    <label>Ver por</label>
+    <select id="rank-mode" onchange="renderRanking()">
+      <option value="mes">Mes actual</option>
+      <option value="semana">Semana actual</option>
+      <option value="mes1">Mes 1</option>
+      <option value="mes2">Mes 2</option>
+      <option value="mes3">Mes 3</option>
+      <option value="mes4">Mes 4</option>
+      <option value="mes5">Mes 5</option>
+      <option value="mes6">Mes 6</option>
+    </select>
+  </div>
+  <div class="stitle" id="rank-title">🏆 Ranking — reuniones agendadas</div>
   <div class="rank-cards" id="rank-cards"></div>
   <div class="stitle" style="margin-top:1.5rem;">📋 Comparativa completa</div>
-  <div class="twrap"><table><thead><tr><th>#</th><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Conversión</th></tr></thead><tbody id="rank-tbl"></tbody></table></div>
+  <div class="twrap"><table><thead><tr><th>#</th><th>SDR</th><th>Total</th><th>Realizadas</th><th>Todavía</th><th>No realizadas</th></tr></thead><tbody id="rank-tbl"></tbody></table></div>
 </section>
 
 
@@ -1496,28 +1509,38 @@ function renderReus() {
 }
 
 // ─── RANKING ─────────────────────────────────────────────────
-function renderRanking() {
+function getRankReus() {
   const now = new Date();
   const curMes = now.getMonth() + 1;
-  const allReus = getAllReus().filter(r => r.mes === curMes);
+  const curSemana = Math.ceil(now.getDate() / 7);
+  const mode = (document.getElementById('rank-mode')||{value:'mes'}).value;
+  const all = getAllReus();
+  if (mode === 'semana') return { reus: all.filter(r => r.mes===curMes && r.semana===curSemana), label: 'Semana actual' };
+  if (mode === 'mes')    return { reus: all.filter(r => r.mes===curMes), label: 'Mes actual' };
+  const m = parseInt(mode.replace('mes',''));
+  return { reus: all.filter(r => r.mes===m), label: 'Mes '+m };
+}
+
+function renderRanking() {
+  const { reus, label } = getRankReus();
+  const titleEl = document.getElementById('rank-title');
+  if (titleEl) titleEl.textContent = '🏆 Ranking — ' + label;
 
   const stats = ['Leandro','Grace','Carmen'].map(sdr => {
-    const monthRecs = records.filter(r=>{
-      const d=new Date(r.fecha);
-      return r.sdr===sdr && d.getMonth()===now.getMonth() && d.getFullYear()===now.getFullYear();
-    });
-    const s = agg(monthRecs);
-    const reuniones = allReus.filter(r => r.sdr===sdr).length;
-    const conv = s.contactados ? Math.round(reuniones/s.contactados*100) : 0;
-    return {...s, sdr, reuniones, conv};
-  }).sort((a,b)=>b.reuniones-a.reuniones);
+    const sdrReus   = reus.filter(r => r.sdr===sdr);
+    const total     = sdrReus.length;
+    const realizadas= sdrReus.filter(r => r.realizada==='SI').length;
+    const todavia   = sdrReus.filter(r => r.realizada==='TODAVIA').length;
+    const no        = sdrReus.filter(r => r.realizada==='NO').length;
+    return { sdr, total, realizadas, todavia, no };
+  }).sort((a,b)=>b.total-a.total);
 
   document.getElementById('rank-cards').innerHTML = stats.map((s,i)=>`
     <div class="rcard ${i===0?'first':''}">
-      <div class="rcard-pos">${['Líder del mes','2° lugar','3° lugar','4° lugar'][i]}</div>
+      <div class="rcard-pos">${['Líder','2° lugar','3° lugar','4° lugar'][i]}</div>
       <div class="rcard-name">${s.sdr}</div>
-      <div class="rcard-val">${s.reuniones}</div>
-      <div class="rcard-sub">reuniones · ${s.contactados.toLocaleString()} contactados</div>
+      <div class="rcard-val">${s.total}</div>
+      <div class="rcard-sub">total · ${s.realizadas} realizadas</div>
     </div>`).join('');
 
   document.getElementById('rank-tbl').innerHTML = stats.map((s,i)=>{
@@ -1527,9 +1550,10 @@ function renderRanking() {
       <td><div style="display:flex;align-items:center;gap:8px;">
         <div style="width:24px;height:24px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${sdrInfo.color};">${sdrInfo.avatar}</div>
         <strong>${s.sdr}</strong></div></td>
-      <td>${s.contactados.toLocaleString()}</td>
-      <td><strong style="color:#34D399;">${s.reuniones}</strong></td>
-      <td><span class="pill ${s.conv>=1?'pg':'pa'}">${s.conv}%</span></td>
+      <td><strong style="color:#34D399;">${s.total}</strong></td>
+      <td style="color:#34D399;">${s.realizadas}</td>
+      <td style="color:#FBBF24;">${s.todavia}</td>
+      <td style="color:#9CA3AF;">${s.no}</td>
     </tr>`;
   }).join('');
 }
