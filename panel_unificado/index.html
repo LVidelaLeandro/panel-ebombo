@@ -253,13 +253,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="kpi-grid" id="d-cards"></div>
 
   <div class="dash-grid">
-    <div class="chart-wrap full">
-      <div class="chart-title"><span class="cdot"></span>Actividad diaria — Contactados por persona</div>
-      <div class="chart-inner" style="height:200px;"><canvas id="timeline-chart"></canvas></div>
-    </div>
-  </div>
-
-  <div class="dash-grid">
     <div class="chart-wrap">
       <div class="chart-title"><span class="cdot" style="background:#C084FC;"></span>Contactados por persona y canal</div>
       <div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart"></canvas></div>
@@ -505,7 +498,6 @@ let miPeriod = '2026-06';
 let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
 let chartInst = null;
 let canalChartInst = null;
-let timelineChartInst = null;
 let reuSdrChartInst = null;
 let sdrCanalChartInst = null;
 
@@ -1054,54 +1046,10 @@ function renderDash() {
   }).filter(Boolean).join('');
   document.getElementById('d-pais-tbl').innerHTML = paisRows||'<tr class="empty-row"><td colspan="6">Sin datos</td></tr>';
 
-  renderTimelineChart(recs);
   renderSdrCanalChart(recs);
   renderCanalChart(reus);
   renderReuSdrChart(reus);
   renderFunnel(t.contactados, t.respuestas, reus.length, realizadas, conCot, won);
-}
-
-function renderTimelineChart(recs) {
-  if (timelineChartInst) { timelineChartInst.destroy(); timelineChartInst = null; }
-  const canvas = document.getElementById('timeline-chart');
-  if (!recs.length) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin registros de actividad</p>';
-    return;
-  }
-  const byDate = {};
-  recs.forEach(r => {
-    if (!r.fecha) return;
-    if (!byDate[r.fecha]) byDate[r.fecha] = {};
-    const sdr = r.sdr || 'Otros';
-    byDate[r.fecha][sdr] = (byDate[r.fecha][sdr]||0) + n(r.contactados);
-  });
-  const labels = Object.keys(byDate).sort();
-  const sdrNames = ['Leandro','Grace','Carmen','Luziana'];
-  const datasets = sdrNames.filter(s => recs.some(r=>r.sdr===s)).map(sdr => ({
-    label: sdr,
-    data: labels.map(d => byDate[d][sdr]||0),
-    borderColor: SDR_COLORS[sdr],
-    backgroundColor: SDR_COLORS[sdr]+'20',
-    borderWidth: 2,
-    pointRadius: labels.length > 20 ? 2 : 4,
-    pointHoverRadius: 6,
-    tension: 0.35,
-    fill: false,
-  }));
-  timelineChartInst = new Chart(canvas, {
-    type: 'line',
-    data: { labels, datasets },
-    options: { ...CHART_DEFAULTS,
-      plugins: {
-        legend: { display: true, position: 'top', labels: { color: '#9CA3AF', font:{size:11}, boxWidth:10, padding:16 } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} contactados` } }
-      },
-      scales: {
-        x: { ticks: { font:{size:10}, color:'#6B7280', maxRotation:45 }, grid: { color:'rgba(255,255,255,0.04)' } },
-        y: { ticks: { font:{size:10}, color:'#6B7280' }, grid: { color:'rgba(255,255,255,0.04)' }, beginAtZero:true }
-      }
-    }
-  });
 }
 
 function renderSdrCanalChart(recs) {
