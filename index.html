@@ -1237,7 +1237,7 @@ function renderFunnel(contactados, respuestas, reuniones, realizadas, cotizacion
 
 // ─── MI PANEL (EDITABLE) ─────────────────────────────────────
 const DEFAULT_OUT = {calls:0,emails:0,linkedin:0,pe_comp:0,pe_pipe:0,mx_comp:0,mx_pipe:0,es_comp:0,es_pipe:0,m_sch:0,m_done:0,g_calls:60,g_emails:150,g_linkedin:80,g_m_sch:15,g_m_done:12,g_pipe:30000};
-const DEFAULT_IB  = {leads:0,contacted:0,meetings:0,recip:0,pipeline:0,g_leads:50,g_contacted:45,g_meetings:20,g_pipeline:25000};
+const DEFAULT_IB  = {leads_form:0,leads_ig:0,contacted:0,meetings:0,recip:0,pipeline:0,g_leads_form:30,g_leads_ig:20,g_contacted:45,g_meetings:20,g_pipeline:25000};
 
 function getMiData(sdr, period) {
   const k = sdr+'_'+period;
@@ -1414,15 +1414,17 @@ function renderMiIb() {
   const {ib} = getMiData(miSdr,miPeriod);
   const s = SDRS.find(x=>x.id===miSdr)||{color:'#34D399'};
   const c = s.color;
-  const contactRate = ib.leads>0?Math.round(ib.contacted/ib.leads*100):null;
-  const convRate    = ib.leads>0?(ib.meetings/ib.leads*100).toFixed(1):null;
+  const totalLeads  = (ib.leads_form||0) + (ib.leads_ig||0);
+  const contactRate = totalLeads>0?Math.round(ib.contacted/totalLeads*100):null;
+  const convRate    = totalLeads>0?(ib.meetings/totalLeads*100).toFixed(1):null;
 
   document.getElementById('mi-ib').innerHTML = `
   <div style="display:flex;flex-direction:column;gap:1.5rem;">
     <div>
       <div class="stitle">📥 Gestión de leads</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
-        ${mCard('Leads recibidos','👤',ib.leads||0,v=>setMiIb({leads:v}),ib.g_leads,v=>setMiIb({g_leads:v}),c)}
+        ${mCard('Leads Formulario','📋',ib.leads_form||0,v=>setMiIb({leads_form:v}),ib.g_leads_form,v=>setMiIb({g_leads_form:v}),c)}
+        ${mCard('Leads Instagram','📸',ib.leads_ig||0,v=>setMiIb({leads_ig:v}),ib.g_leads_ig,v=>setMiIb({g_leads_ig:v}),c)}
         ${mCard('Contactados','💬',ib.contacted||0,v=>setMiIb({contacted:v}),ib.g_contacted,v=>setMiIb({g_contacted:v}),c)}
         ${mCard('Reuniones','📅',ib.meetings||0,v=>setMiIb({meetings:v}),ib.g_meetings,v=>setMiIb({g_meetings:v}),c)}
         ${mCard('Reciprocidad','🔄',ib.recip||0,v=>setMiIb({recip:v}),undefined,undefined,c)}
@@ -1434,7 +1436,7 @@ function renderMiIb() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
         <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Tasa de contacto</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#60A5FA;">${contactRate!==null?contactRate+'%':'—'}</div></div>
         <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Lead → reunión</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#34D399;">${convRate!==null?convRate+'%':'—'}</div></div>
-        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Pipeline / lead</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#C084FC;">${ib.leads>0?'$'+fmt(Math.round(ib.pipeline/ib.leads)):'—'}</div></div>
+        <div class="mcard" style="background:var(--s1);"><div class="mcard-lbl">Pipeline / lead</div><div style="font-size:20px;font-weight:800;font-family:'Syne',sans-serif;color:#C084FC;">${totalLeads>0?'$'+fmt(Math.round(ib.pipeline/totalLeads)):'—'}</div></div>
       </div>
     </div>
   </div>`;
