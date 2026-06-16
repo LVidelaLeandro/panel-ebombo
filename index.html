@@ -248,22 +248,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button class="btn-sm" onclick="openEmailModal()" style="color:#F472B6;border-color:#4B1D3F;">✉️ Destinatarios</button>
   </div>
 
-  <!-- KPI CARDS -->
+  <!-- ── REUNIONES ── -->
+  <div class="stitle" style="margin-bottom:.75rem;">Reuniones</div>
   <div class="kpi-grid" id="d-cards"></div>
 
-  <!-- FILA 2: Actividad por canal + Origen de reuniones -->
   <div class="dash-grid">
-    <div class="chart-wrap">
-      <div class="chart-title"><span class="cdot" style="background:#C084FC;"></span>Contactados por persona y canal</div>
-      <div class="chart-inner" style="height:220px;"><canvas id="sdr-canal-chart"></canvas></div>
-    </div>
     <div class="chart-wrap">
       <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>Origen de reuniones — por canal</div>
       <div class="chart-inner" style="height:220px;"><canvas id="canal-chart"></canvas></div>
     </div>
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#34D399;"></span>Outbound vs Inbound</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="obib-chart"></canvas></div>
+    </div>
   </div>
 
-  <!-- FILA 3: Reuniones por SDR + Embudo -->
   <div class="dash-grid">
     <div class="chart-wrap">
       <div class="chart-title"><span class="cdot" style="background:#34D399;"></span>Reuniones por persona</div>
@@ -275,19 +274,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
 
-  <!-- FILA 4: Tablas SDR + País -->
-  <div class="dash-grid">
+  <div class="dash-grid" style="margin-bottom:1.5rem;">
     <div>
       <div class="stitle" style="margin-bottom:.5rem;">Por SDR</div>
       <div class="twrap"><table>
-        <thead><tr><th>SDR</th><th>Contactados</th><th>Reuniones</th><th>Realizadas</th><th>Cotizaciones</th><th>Pipeline</th><th>WON</th><th>Conv%</th></tr></thead>
+        <thead><tr><th>SDR</th><th>Reuniones</th><th>Outbound</th><th>Inbound</th><th>Realizadas</th><th>Pipeline</th><th>WON</th></tr></thead>
         <tbody id="d-sdr-tbl"></tbody>
       </table></div>
     </div>
     <div>
       <div class="stitle" style="margin-bottom:.5rem;">Por país</div>
       <div class="twrap"><table>
-        <thead><tr><th>País</th><th>Contactados</th><th>Reuniones</th><th>Realizadas</th><th>Pipeline</th><th>Conv%</th></tr></thead>
+        <thead><tr><th>País</th><th>Reuniones</th><th>Outbound</th><th>Inbound</th><th>Realizadas</th><th>Pipeline</th></tr></thead>
         <tbody id="d-pais-tbl"></tbody>
       </table></div>
     </div>
@@ -467,6 +465,7 @@ let chartInst = null;
 let canalChartInst = null;
 let sdrCanalChartInst = null;
 let reuSdrChartInst = null;
+let obibChartInst = null;
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -958,9 +957,10 @@ function filterReus(sdrF, paisF, perF) {
   const now3 = new Date();
   const cm = now3.getMonth()+1;
   const cs = Math.ceil(now3.getDate()/7);
+  const pf = paisF==='Mexico'?'MEXICO':paisF==='Peru'?'PERU':paisF==='Spain'?'ESPANA':paisF;
   return getAllReus().filter(r => {
     if (sdrF!=='all' && r.sdr!==sdrF) return false;
-    if (paisF!=='all' && r.pais!==paisF) return false;
+    if (pf!=='all' && r.pais!==pf) return false;
     if (perF==='week')  return r.mes===cm && r.semana===cs;
     if (perF==='month') return r.mes===cm;
     return true;
@@ -980,64 +980,60 @@ function renderDash() {
   const pipeline   = reus.reduce((s,r)=>s+(r.monto||0),0);
   const won        = reus.filter(r=>r.estado==='WON').length;
   const hot        = reus.filter(r=>r.estado==='HOT').length;
-  const conv       = t.contactados ? (reus.length/t.contactados*100).toFixed(2) : 0;
+  const outbound   = reus.filter(r=>r.canal!=='INBOUND').length;
+  const inbound    = reus.filter(r=>r.canal==='INBOUND').length;
 
   document.getElementById('d-cards').innerHTML = `
-    <div class="card b"><div class="card-lbl">Contactados</div><div class="card-val">${t.contactados.toLocaleString()}</div><div class="card-sub">logs de actividad</div></div>
     <div class="card g"><div class="card-lbl">Reuniones</div><div class="card-val">${reus.length}</div><div class="card-sub">${realizadas} realizadas</div></div>
-    <div class="card a"><div class="card-lbl">Cotizaciones</div><div class="card-val">${conCot}</div><div class="card-sub">$${pipeline>0?Math.round(pipeline/1000)+'k':0} pipeline</div></div>
+    <div class="card b"><div class="card-lbl">Outbound</div><div class="card-val">${outbound}</div><div class="card-sub">${reus.length?Math.round(outbound/reus.length*100):0}% del total</div></div>
+    <div class="card"><div class="card-lbl" style="color:var(--muted);">Inbound</div><div class="card-val" style="color:#2DD4BF;">${inbound}</div><div class="card-sub">${reus.length?Math.round(inbound/reus.length*100):0}% del total</div></div>
+    <div class="card g"><div class="card-lbl">Realizadas</div><div class="card-val">${realizadas}</div><div class="card-sub">${reus.length?Math.round(realizadas/reus.length*100):0}% show rate</div></div>
     <div class="card g"><div class="card-lbl">WON</div><div class="card-val">${won}</div><div class="card-sub">${hot} HOT activos</div></div>
-    <div class="card b"><div class="card-lbl">Tasa conv.</div><div class="card-val" style="font-size:20px;">${conv}%</div><div class="card-sub">cont → reunión</div></div>
-    <div class="card a"><div class="card-lbl">Respuestas</div><div class="card-val">${t.respuestas}</div><div class="card-sub">${t.contactados?Math.round(t.respuestas/t.contactados*100):0}% reply rate</div></div>`;
+    <div class="card a"><div class="card-lbl">Pipeline</div><div class="card-val" style="font-size:20px;">$${pipeline>0?Math.round(pipeline/1000)+'k':0}</div><div class="card-sub">${conCot} con cotización</div></div>`;
 
-  // Tabla por SDR (enriquecida con datos de reuniones)
   const sdrRows = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
-    const sr   = filtered(sdr, paisF, perF);
-    const s    = agg(sr);
     const sreus = reus.filter(r=>r.sdr===sdr);
-    const real = sreus.filter(r=>r.realizada==='SI').length;
-    const cot  = sreus.filter(r=>r.cotizacion==='SI').length;
-    const pip  = sreus.reduce((a,r)=>a+(r.monto||0),0);
-    const w    = sreus.filter(r=>r.estado==='WON').length;
-    const conv = sreus.length && real ? Math.round(cot/real*100) : 0;
+    const sr    = filtered(sdr, paisF, perF);
+    const s     = agg(sr);
+    const real  = sreus.filter(r=>r.realizada==='SI').length;
+    const ob    = sreus.filter(r=>r.canal!=='INBOUND').length;
+    const ib    = sreus.filter(r=>r.canal==='INBOUND').length;
+    const pip   = sreus.reduce((a,r)=>a+(r.monto||0),0);
+    const w     = sreus.filter(r=>r.estado==='WON').length;
     const sdrInfo = SDRS.find(x=>x.label===sdr)||{color:'#6B7280',avatar:sdr.slice(0,2).toUpperCase()};
     if (!s.contactados && !sreus.length) return '';
     return `<tr>
       <td><div style="display:flex;align-items:center;gap:8px;">
         <div style="width:26px;height:26px;border-radius:50%;background:${sdrInfo.color}22;border:1px solid ${sdrInfo.color}44;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${sdrInfo.color}">${sdrInfo.avatar}</div>
         <strong>${sdr}</strong></div></td>
-      <td>${s.contactados.toLocaleString()}</td>
-      <td>${sreus.length}</td>
-      <td class="${real?'':'muted'}">${real}</td>
-      <td>${cot||'—'}</td>
+      <td><strong style="color:var(--green);">${sreus.length}</strong></td>
+      <td style="color:var(--blue);">${ob||'—'}</td>
+      <td style="color:#2DD4BF;">${ib||'—'}</td>
+      <td>${real||'—'}</td>
       <td class="${pip>0?'g':''}">${pip>0?'$'+pip.toLocaleString():'—'}</td>
-      <td class="${w?'g':''}">${w||'—'}</td>
-      <td><span class="pill ${conv>=50?'pg':conv>=25?'pa':'pb'}">${conv}%</span></td></tr>`;
+      <td class="${w?'g':''}">${w||'—'}</td></tr>`;
   }).filter(Boolean).join('');
-  document.getElementById('d-sdr-tbl').innerHTML = sdrRows||'<tr class="empty-row"><td colspan="8">Sin datos para este período</td></tr>';
+  document.getElementById('d-sdr-tbl').innerHTML = sdrRows||'<tr class="empty-row"><td colspan="7">Sin datos para este período</td></tr>';
 
-  // Tabla por país (enriquecida)
   const paisRows = ['Mexico','Peru','Spain'].map(p => {
-    const pr   = filtered(sdrF, p, perF);
-    const s    = agg(pr);
     const preus = filterReus(sdrF, p, perF);
     const real  = preus.filter(r=>r.realizada==='SI').length;
     const pip   = preus.reduce((a,r)=>a+(r.monto||0),0);
-    const cot   = preus.filter(r=>r.cotizacion==='SI').length;
-    const conv  = real ? Math.round(cot/real*100) : 0;
-    if (!s.contactados && !preus.length) return '';
+    const ob    = preus.filter(r=>r.canal!=='INBOUND').length;
+    const ib    = preus.filter(r=>r.canal==='INBOUND').length;
+    if (!preus.length) return '';
     return `<tr><td>${flag(p)} ${paisLabel(p)}</td>
-      <td>${s.contactados.toLocaleString()}</td>
-      <td>${preus.length}</td>
+      <td><strong style="color:var(--green);">${preus.length}</strong></td>
+      <td style="color:var(--blue);">${ob||'—'}</td>
+      <td style="color:#2DD4BF;">${ib||'—'}</td>
       <td>${real||'—'}</td>
-      <td class="${pip>0?'g':''}">${pip>0?'$'+pip.toLocaleString():'—'}</td>
-      <td><span class="pill ${conv>=50?'pg':conv>=25?'pa':'pb'}">${conv?conv+'%':'—'}</span></td></tr>`;
+      <td class="${pip>0?'g':''}">${pip>0?'$'+pip.toLocaleString():'—'}</td></tr>`;
   }).filter(Boolean).join('');
   document.getElementById('d-pais-tbl').innerHTML = paisRows||'<tr class="empty-row"><td colspan="6">Sin datos</td></tr>';
 
-  renderSdrCanalChart(recs);
   renderCanalChart(reus);
   renderReuSdrChart(reus);
+  renderOBIBChart(reus);
   renderFunnel(t.contactados, t.respuestas, reus.length, realizadas, conCot, won);
 }
 
@@ -1138,6 +1134,71 @@ function renderCanalChart(reus) {
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)` } }
+      }
+    }
+  });
+}
+
+function renderOBIBChart(reus) {
+  if (obibChartInst) { obibChartInst.destroy(); obibChartInst = null; }
+  const canvas = document.getElementById('obib-chart');
+  if (!canvas) return;
+  const outbound = reus.filter(r=>r.canal!=='INBOUND').length;
+  const inbound  = reus.filter(r=>r.canal==='INBOUND').length;
+  const total    = outbound + inbound;
+  if (!total) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
+    return;
+  }
+  const centerPlugin = {
+    id:'obibCenter',
+    beforeDraw(ch) {
+      if (!ch.chartArea) return;
+      const {ctx,chartArea:{top,bottom,left,right}} = ch;
+      const cx=(left+right)/2, cy=(top+bottom)/2;
+      ctx.save();
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle='#F9FAFB'; ctx.font="800 22px 'Syne',sans-serif";
+      ctx.fillText(total, cx, cy-9);
+      ctx.fillStyle='#6B7280'; ctx.font="400 11px 'DM Sans',sans-serif";
+      ctx.fillText('reuniones', cx, cy+11);
+      ctx.restore();
+    }
+  };
+  obibChartInst = new Chart(canvas, {
+    type:'doughnut',
+    plugins:[centerPlugin],
+    data:{
+      labels:['Outbound','Inbound'],
+      datasets:[{
+        data:[outbound, inbound],
+        backgroundColor:['#60A5FA33','#2DD4BF33'],
+        borderColor:['#60A5FA','#2DD4BF'],
+        borderWidth:2,
+        hoverOffset:6,
+      }]
+    },
+    options:{
+      ...CHART_DEFAULTS,
+      cutout:'62%',
+      plugins:{
+        legend:{
+          display:true, position:'bottom',
+          labels:{
+            font:{size:11}, color:'var(--text)', boxWidth:12, padding:16,
+            generateLabels(ch){
+              return ch.data.labels.map((lbl,i)=>{
+                const val=ch.data.datasets[0].data[i];
+                const pct=total?Math.round(val/total*100):0;
+                return {text:`${lbl}  ${val} (${pct}%)`,fillStyle:ch.data.datasets[0].borderColor[i],strokeStyle:ch.data.datasets[0].borderColor[i],lineWidth:1.5,index:i};
+              });
+            }
+          }
+        },
+        tooltip:{callbacks:{label:ctx=>{
+          const val=ctx.parsed;
+          return ` ${ctx.label}: ${val} (${total?Math.round(val/total*100):0}%)`;
+        }}}
       }
     }
   });
