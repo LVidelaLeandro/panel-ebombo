@@ -357,7 +357,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
   <div class="cards" id="re-cards"></div>
-  <div class="twrap"><table><thead><tr><th>M/S</th><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto</th></tr></thead><tbody id="re-tbl"></tbody></table></div>
+  <div class="twrap"><table><thead><tr><th>M/S</th><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto</th><th></th></tr></thead><tbody id="re-tbl"></tbody></table></div>
 </section>
 
 <!-- ═══════ RANKING ═══════ -->
@@ -1549,8 +1549,25 @@ function renderReus() {
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
       <td><strong>${r.sdr}</strong></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.empresa}">${r.empresa}</td>
-      <td>${paisLabels[r.pais]||r.pais}</td>
-      <td><span class="pill pb">${r.canal}</span></td>
+      <td>
+        <select onchange="editReu('${ks}','pais',this.value)" style="${selStyle}">
+          <option value="PERU"   ${r.pais==='PERU'  ?'selected':''}>🇵🇪 Perú</option>
+          <option value="MEXICO" ${r.pais==='MEXICO'?'selected':''}>🇲🇽 México</option>
+          <option value="ESPANA" ${r.pais==='ESPANA'?'selected':''}>🇪🇸 España</option>
+        </select>
+      </td>
+      <td>
+        <select onchange="editReu('${ks}','canal',this.value)" style="${selStyle}">
+          <option value="REPLY"       ${r.canal==='REPLY'      ?'selected':''}>REPLY</option>
+          <option value="PROSPECCION" ${r.canal==='PROSPECCION'?'selected':''}>PROSPECCION</option>
+          <option value="INBOUND"     ${r.canal==='INBOUND'    ?'selected':''}>INBOUND</option>
+          <option value="LinkedIn"    ${r.canal==='LinkedIn'   ?'selected':''}>LinkedIn</option>
+          <option value="Correo"      ${r.canal==='Correo'     ?'selected':''}>Correo</option>
+          <option value="Llamada"     ${r.canal==='Llamada'    ?'selected':''}>Llamada</option>
+          <option value="WhatsApp"    ${r.canal==='WhatsApp'   ?'selected':''}>WhatsApp</option>
+          <option value="Otros"       ${r.canal==='Otros'      ?'selected':''}>Otros</option>
+        </select>
+      </td>
       <td>
         <select onchange="editReu('${ks}','realizada',this.value)" style="${selStyle}">
           <option value="SI" ${r.realizada==='SI'?'selected':''}>Sí</option>
@@ -1581,8 +1598,13 @@ function renderReus() {
           style="cursor:text;display:inline-block;min-width:40px;padding:1px 4px;border-bottom:1px dashed var(--border2);color:${r.monto>0?'#34D399':'var(--muted)'};"
         >${r.monto>0?fmt(r.monto):''}</span>
       </td>
+      <td style="text-align:center;">
+        <button onclick="deleteReu('${ks}')" title="Eliminar reunión"
+          style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:14px;padding:2px 6px;line-height:1;border-radius:4px;"
+          onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='none'">🗑</button>
+      </td>
     </tr>`;
-  }).join('')||'<tr class="empty-row"><td colspan="9">Sin reuniones para este filtro</td></tr>';
+  }).join('')||'<tr class="empty-row"><td colspan="10">Sin reuniones para este filtro</td></tr>';
 }
 
 // ─── RANKING ─────────────────────────────────────────────────
@@ -1979,7 +2001,7 @@ function getAllReus() {
   const base = REUNIONES_DATA.map(r => {
     const key = getReuKey(r);
     return reuEdits[key] ? {...r, ...reuEdits[key]} : r;
-  });
+  }).filter(r => !r._deleted);
   return base.concat(reusExtras);
 }
 
@@ -2023,6 +2045,20 @@ function editReu(key, field, val) {
   } else {
     if (!reuEdits[key]) reuEdits[key] = {};
     reuEdits[key][field] = v;
+    localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
+  }
+  renderReus();
+}
+
+function deleteReu(key) {
+  if (!confirm('¿Eliminar esta reunión?')) return;
+  const idx = reusExtras.findIndex(x => x._id === key);
+  if (idx !== -1) {
+    reusExtras.splice(idx, 1);
+    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+  } else {
+    if (!reuEdits[key]) reuEdits[key] = {};
+    reuEdits[key]._deleted = true;
     localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
   }
   renderReus();
