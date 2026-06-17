@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v12',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v13',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1871,6 +1871,46 @@ function exportReporte(period) {
       n: periodReus.filter(r=>r.sdr===sdr&&r.canal===canal).length
     })).filter(x=>x.n>0)
   }));
+  // Eventos: weekly, country-vs-meta, pipeline, canal breakdown
+  const evSemanas = [...new Set(eventosReus.map(r=>r.semana))].sort((a,b)=>a-b);
+  const evWeekRows = evSemanas.map(sem => {
+    const sr = eventosReus.filter(r=>r.semana===sem);
+    return {
+      sem,
+      allTod: sr.length>0 && sr.every(r=>r.realizada==='TODAVIA'),
+      bySDR: eventosStats.map(s => ({
+        sdr:s.sdr, sColor:s.sColor,
+        real: s.reus.filter(r=>r.semana===sem&&r.realizada==='SI').length,
+        tod:  s.reus.filter(r=>r.semana===sem&&r.realizada==='TODAVIA').length
+      })),
+      totalReal: sr.filter(r=>r.realizada==='SI').length,
+      totalTod:  sr.filter(r=>r.realizada==='TODAVIA').length
+    };
+  });
+  const META_POR_PAIS = {PERU:6,MEXICO:7,ESPANA:7};
+  const evPaisRows = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
+    label:l, meta:META_POR_PAIS[k],
+    sdrs: eventosStats.map(s => {
+      const n = s.reus.filter(r=>r.pais===k&&r.realizada==='SI').length;
+      const tot = s.reus.filter(r=>r.pais===k).length;
+      const pct = Math.round(n/META_POR_PAIS[k]*100);
+      const col = pct>=100?'#1a5c2a':pct>=80?'#4a9e3f':pct>=41?'#e6a817':'#cc0000';
+      return {sdr:s.sdr, sColor:s.sColor, n, tot, pct, col};
+    })
+  }));
+  const evPipDeals = eventosReus.filter(r=>r.monto>0).sort((a,b)=>b.monto-a.monto);
+  const evPipPais = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
+    label:l, total: eventosReus.filter(r=>r.pais===k).reduce((s,r)=>s+(r.monto||0),0)
+  })).filter(p=>p.total>0);
+  const evPipMax = Math.max(...evPipPais.map(p=>p.total),1);
+  const evRealReus = eventosReus.filter(r=>r.realizada==='SI');
+  const evCanalList = [...new Set(evRealReus.map(r=>r.canal).filter(Boolean))];
+  const evCanalRows = evCanalList.map(canal => {
+    const sems = evSemanas.map(sem => evRealReus.filter(r=>r.semana===sem&&r.canal===canal).length);
+    const tot = evRealReus.filter(r=>r.canal===canal).length;
+    const pct = evRealReus.length ? Math.round(tot/evRealReus.length*100) : 0;
+    return {canal, sems, tot, pct};
+  }).sort((a,b)=>b.tot-a.tot);
 
   const paisMap = { Mexico:'México', Peru:'Perú', Spain:'España' };
   const paisStats = ['Mexico','Peru','Spain'].map(pais => {
@@ -1996,6 +2036,7 @@ tr:last-child td{border-bottom:none;}
 .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
 .pwon{background:#D1FAE5;color:#065F46;} .plost{background:#FEE2E2;color:#991B1B;} .phot{background:#FEF3C7;color:#92400E;}
 .nodata{color:#9CA3AF;font-style:italic;font-size:12px;padding:8px 0;}
+.sub-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#3a3596;margin:1.2rem 0 .4rem;}
 .ftr{background:#3a3596;padding:1.5rem 3rem;}
 .ftr-bye{color:#d4cff0;font-size:13px;line-height:1.7;margin-bottom:1rem;}
 .ftr-sign{color:#a89ede;font-size:11px;border-top:1px solid #4a4498;padding-top:.75rem;}
@@ -2055,40 +2096,75 @@ tr:last-child td{border-bottom:none;}
       ${s.es.length?`<div class="country-chip">🇪🇸 España <strong>${s.es.length}</strong>${s.es.filter(r=>r.realizada==='SI').length?` · ${s.es.filter(r=>r.realizada==='SI').length} real.`:''}</div>`:''}
     </div>
   </div>`).join('') : '<p class="nodata">Sin reuniones de Eventos para este período.</p>'}
-  ${eventosStats.length>1?`<table style="margin-top:1rem;">
-    <thead><tr><th>SDR</th><th>🇵🇪 Perú</th><th>🇲🇽 México</th><th>🇪🇸 España</th><th>Total</th><th>Meta</th><th>%</th><th>Realizadas</th><th>Pipeline</th></tr></thead>
+  ${evWeekRows.length>0?`
+  <p class="sub-lbl">Reuniones por semana</p>
+  <table>
+    <thead><tr><th>Semana</th>${eventosStats.map(s=>`<th style="color:${s.sColor}">${s.sdr}</th>`).join('')}<th>Total</th></tr></thead>
     <tbody>
-    ${eventosStats.map(s=>`<tr>
-      <td><strong style="color:${s.sColor}">${s.sdr}</strong></td>
-      <td>${s.pe.length||'—'}</td><td>${s.mx.length||'—'}</td><td>${s.es.length||'—'}</td>
-      <td class="vio"><strong>${s.reus.length}</strong></td>
-      <td>${META_EVENTOS}</td>
-      <td style="color:${s.semBg};font-weight:700">${s.pct}%</td>
-      <td class="g">${s.real||'—'}</td>
-      <td class="g">${s.pip?money(s.pip):'—'}</td>
+    ${evWeekRows.map(w=>`<tr${w.allTod?' style="background:#f9f8ff;"':''}>
+      <td><strong>${w.allTod?'★ ':''}Sem ${w.sem}</strong></td>
+      ${w.bySDR.map(x=>`<td>${x.real?`<strong style="color:${x.sColor}">${x.real}</strong>`:''}${x.tod?`<span style="color:#9CA3AF;font-size:10px;">${x.real?' +':'+'}${x.tod}★</span>`:''}${!x.real&&!x.tod?'—':''}</td>`).join('')}
+      <td class="vio"><strong>${w.totalReal}${w.totalTod?` <span style="color:#9CA3AF;font-size:10px;">+${w.totalTod}★</span>`:''}</strong></td>
     </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL</td>
-      <td>${eventosReus.filter(r=>r.pais==='PERU').length||'—'}</td>
-      <td>${eventosReus.filter(r=>r.pais==='MEXICO').length||'—'}</td>
-      <td>${eventosReus.filter(r=>r.pais==='ESPANA').length||'—'}</td>
-      <td>${eventosReus.length}</td><td>${META_EVENTOS*eventosStats.length}</td>
-      <td>${Math.round(eventosReus.filter(r=>r.realizada==='SI').length/(META_EVENTOS*eventosStats.length)*100)}%</td>
-      <td>${eventosReus.filter(r=>r.realizada==='SI').length||'—'}</td>
-      <td>${eventosReus.reduce((s,r)=>s+(r.monto||0),0)?money(eventosReus.reduce((s,r)=>s+(r.monto||0),0)):'—'}</td>
-    </tr>
+    <tr class="tr-total"><td>TOTAL</td>${eventosStats.map(s=>`<td>${s.real}${s.tod?` <span style="color:#9CA3AF;font-size:10px;">+${s.tod}★</span>`:''}</td>`).join('')}<td>${evRealReus.length}</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:10px;color:#9CA3AF;margin-top:4px;">★ Proyección — reuniones TODAVÍA</p>`:''}
+
+  ${evPaisRows.some(p=>p.sdrs.some(x=>x.tot>0))?`
+  <p class="sub-lbl">Avance por país vs meta</p>
+  <table>
+    <thead><tr><th>País</th><th>Meta/SDR</th>${eventosStats.map(s=>`<th style="color:${s.sColor}">${s.sdr}</th>`).join('')}</tr></thead>
+    <tbody>
+    ${evPaisRows.map(p=>`<tr>
+      <td><strong>${p.label}</strong></td>
+      <td style="color:#9CA3AF;">${p.meta} reu.</td>
+      ${p.sdrs.map(x=>`<td><span style="font-weight:700;color:${x.col};">${x.n}/${p.meta}</span> <span style="font-size:10px;color:${x.col};">${x.pct}%</span></td>`).join('')}
+    </tr>`).join('')}
     </tbody>
   </table>`:''}
-  ${canalEntries.filter(([k])=>k!=='INBOUND').length?`
-  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin:1rem 0 .5rem;">Canal de agendamiento</p>
-  <div class="cards" style="margin-bottom:0;">
-    ${canalEntries.filter(([k])=>k!=='INBOUND').map(([k,v])=>`<div class="card" style="min-width:90px;padding:10px 14px;">
-      <div class="card-lbl">${k}</div>
-      <div class="card-val b" style="font-size:20px;">${v}</div>
-      <div style="font-size:10px;color:#9CA3AF;">${totAgendadas?Math.round(v/totAgendadas*100):0}%</div>
-    </div>`).join('')}
-  </div>`:''}
+
+  ${evCanalRows.length?`
+  <p class="sub-lbl">Canal de agendamiento</p>
+  <table>
+    <thead><tr><th>Canal</th>${evSemanas.map(s=>`<th>Sem ${s}</th>`).join('')}<th>Total</th><th>%</th></tr></thead>
+    <tbody>
+    ${evCanalRows.map(c=>`<tr>
+      <td><strong>${c.canal}</strong></td>
+      ${c.sems.map(n=>`<td class="${n?'vio':''}">${n||'—'}</td>`).join('')}
+      <td class="vio"><strong>${c.tot}</strong></td>
+      <td style="white-space:nowrap;">
+        <div style="display:inline-block;background:#e5e2f8;border-radius:3px;height:5px;width:${Math.round(c.pct*0.6)}px;vertical-align:middle;overflow:hidden;margin-right:4px;"><div style="background:#3a3596;height:100%;width:100%;"></div></div>${c.pct}%
+      </td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL</td>${evSemanas.map(sem=>`<td>${evRealReus.filter(r=>r.semana===sem).length}</td>`).join('')}<td>${evRealReus.length}</td><td>100%</td></tr>
+    </tbody>
+  </table>`:''}
+
+  ${evPipDeals.length?`
+  <p class="sub-lbl">Pipeline generado</p>
+  <table>
+    <thead><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Sem.</th><th>Monto USD</th></tr></thead>
+    <tbody>
+    ${evPipDeals.map(r=>`<tr>
+      <td>${r.sdr}</td>
+      <td><strong>${r.empresa}</strong></td>
+      <td>${r.pais==='PERU'?'🇵🇪 Perú':r.pais==='MEXICO'?'🇲🇽 México':r.pais==='ESPANA'?'🇪🇸 España':r.pais||'—'}</td>
+      <td>Sem ${r.semana||'—'}</td>
+      <td class="g"><strong>${money(r.monto)}</strong></td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td colspan="4">TOTAL</td><td>${money(evPipDeals.reduce((s,r)=>s+(r.monto||0),0))}</td></tr>
+    </tbody>
+  </table>
+  ${evPipPais.length?`<div style="margin-top:.75rem;">${evPipPais.map(p=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;font-size:12px;">
+    <span style="min-width:100px;">${p.label}</span>
+    <div style="background:#e5e2f8;border-radius:4px;height:8px;flex:1;overflow:hidden;"><div style="background:#3a3596;height:100%;width:${Math.round(p.total/evPipMax*100)}%;"></div></div>
+    <span style="color:#3a3596;font-weight:700;min-width:75px;text-align:right;">${money(p.total)}</span>
+  </div>`).join('')}</div>`:''}
+  `:''}
+
   ${todaviaEntries.length?`
-  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin:1.2rem 0 .5rem;">Proyección — reuniones TODAVÍA</p>
+  <p class="sub-lbl">Proyección — reuniones TODAVÍA</p>
   <table>
     <thead><tr><th>Semana</th><th>SDR</th><th>Empresa</th><th>País</th></tr></thead>
     <tbody>${todaviaEntries.flatMap(([sem,rr])=>rr.map((r,i)=>`<tr>
