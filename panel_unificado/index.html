@@ -6,6 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<script>try{const _V='v4';if(localStorage.getItem('_ebv')!==_V){localStorage.setItem('_ebv',_V);location.reload(true);}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -342,10 +343,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="fg"><label>País</label><select id="nr-pais"><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select></div>
       <div class="fg"><label>Canal</label><select id="nr-canal">
         <option value="REPLY">REPLY</option>
+        <option value="PROSPECCION">PROSPECCION</option>
         <option value="INBOUND">INBOUND</option>
+        <option value="BDEV">BDEV</option>
         <option value="LinkedIn">LinkedIn</option>
         <option value="Correo">Correo</option>
-        <option value="Llamada">Llamada</option>
+        <option value="Llamadas">Llamadas</option>
         <option value="WhatsApp">WhatsApp</option>
         <option value="Otros">Otros</option>
       </select></div>
@@ -1565,13 +1568,15 @@ function renderReus() {
         </select>
       </td>
       <td>
-        <select onchange="editReuAt(${i},'canal',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'canal',this.value);const _c=CANAL_COLORS[this.value]||'#9CA3AF';this.style.borderColor=_c;this.style.color=_c;"
+          style="background:var(--s1);border:1px solid ${CANAL_COLORS[r.canal]||'#9CA3AF'};color:${CANAL_COLORS[r.canal]||'#9CA3AF'};border-radius:4px;font-size:11px;padding:2px 4px;cursor:pointer;font-weight:600;">
           <option value="REPLY"       ${r.canal==='REPLY'      ?'selected':''}>REPLY</option>
           <option value="PROSPECCION" ${r.canal==='PROSPECCION'?'selected':''}>PROSPECCION</option>
           <option value="INBOUND"     ${r.canal==='INBOUND'    ?'selected':''}>INBOUND</option>
+          <option value="BDEV"        ${r.canal==='BDEV'       ?'selected':''}>BDEV</option>
           <option value="LinkedIn"    ${r.canal==='LinkedIn'   ?'selected':''}>LinkedIn</option>
           <option value="Correo"      ${r.canal==='Correo'     ?'selected':''}>Correo</option>
-          <option value="Llamada"     ${r.canal==='Llamada'    ?'selected':''}>Llamada</option>
+          <option value="Llamadas"    ${(r.canal==='Llamadas'||r.canal==='Llamada')?'selected':''}>Llamadas</option>
           <option value="WhatsApp"    ${r.canal==='WhatsApp'   ?'selected':''}>WhatsApp</option>
           <option value="Otros"       ${r.canal==='Otros'      ?'selected':''}>Otros</option>
         </select>
@@ -1995,6 +2000,19 @@ try { reusExtras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]'); 
 
 let reuEdits = {};
 try { reuEdits = JSON.parse(localStorage.getItem('ebombo_reus_edits')||'{}'); } catch(e) {}
+
+const CANAL_COLORS = {
+  'REPLY':       '#60A5FA',
+  'PROSPECCION': '#34D399',
+  'INBOUND':     '#C084FC',
+  'BDEV':        '#FB923C',
+  'LinkedIn':    '#818CF8',
+  'Correo':      '#FBBF24',
+  'Llamadas':    '#2DD4BF',
+  'Llamada':     '#2DD4BF',
+  'WhatsApp':    '#4ADE80',
+  'Otros':       '#9CA3AF',
+};
 
 function getReuKey(r) {
   return r._id || [r.mes, r.semana, r.sdr, r.empresa].join('__');
