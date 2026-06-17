@@ -1557,22 +1557,22 @@ function renderReus() {
 
   const selStyle = `background:var(--s1);border:1px solid var(--border);color:var(--text);border-radius:4px;font-size:11px;padding:2px 4px;cursor:pointer;`;
 
-  document.getElementById('re-tbl').innerHTML = recs.map(r=>{
-    const key = getReuKey(r);
-    const ks = key.replace(/'/g,"\\'");
+  window._reuRecs = recs;
+  document.getElementById('re-tbl').innerHTML = recs.map((r,i)=>{
+    const emp = r.empresa.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
       <td><strong>${r.sdr}</strong></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.empresa}">${r.empresa}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${emp}">${emp}</td>
       <td>
-        <select onchange="editReu('${ks}','pais',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'pais',this.value)" style="${selStyle}">
           <option value="PERU"   ${r.pais==='PERU'  ?'selected':''}>🇵🇪 Perú</option>
           <option value="MEXICO" ${r.pais==='MEXICO'?'selected':''}>🇲🇽 México</option>
           <option value="ESPANA" ${r.pais==='ESPANA'?'selected':''}>🇪🇸 España</option>
         </select>
       </td>
       <td>
-        <select onchange="editReu('${ks}','canal',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'canal',this.value)" style="${selStyle}">
           <option value="REPLY"       ${r.canal==='REPLY'      ?'selected':''}>REPLY</option>
           <option value="PROSPECCION" ${r.canal==='PROSPECCION'?'selected':''}>PROSPECCION</option>
           <option value="INBOUND"     ${r.canal==='INBOUND'    ?'selected':''}>INBOUND</option>
@@ -1584,20 +1584,20 @@ function renderReus() {
         </select>
       </td>
       <td>
-        <select onchange="editReu('${ks}','realizada',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'realizada',this.value)" style="${selStyle}">
           <option value="SI" ${r.realizada==='SI'?'selected':''}>Sí</option>
           <option value="NO" ${r.realizada==='NO'?'selected':''}>No</option>
           <option value="TODAVIA" ${r.realizada==='TODAVIA'?'selected':''}>Todavía</option>
         </select>
       </td>
       <td>
-        <select onchange="editReu('${ks}','cotizacion',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'cotizacion',this.value)" style="${selStyle}">
           <option value="SI" ${r.cotizacion==='SI'?'selected':''}>Sí</option>
           <option value="NO" ${r.cotizacion==='NO'?'selected':''}>No</option>
         </select>
       </td>
       <td>
-        <select onchange="editReu('${ks}','estado',this.value)" style="${selStyle}">
+        <select onchange="editReuAt(${i},'estado',this.value)" style="${selStyle}">
           <option value=""     ${!r.estado?'selected':''}>En proceso</option>
           <option value="HOT"  ${r.estado==='HOT'?'selected':''}>HOT 🔥</option>
           <option value="WON"  ${r.estado==='WON'?'selected':''}>WON 🏆</option>
@@ -1608,13 +1608,13 @@ function renderReus() {
       <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500;">
         <span contenteditable="true"
           onfocus="let rr=document.createRange();rr.selectNodeContents(this);let ss=window.getSelection();ss.removeAllRanges();ss.addRange(rr);"
-          onblur="editReu('${ks}','monto',this.textContent)"
+          onblur="editReuAt(${i},'monto',this.textContent)"
           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
           style="cursor:text;display:inline-block;min-width:40px;padding:1px 4px;border-bottom:1px dashed var(--border2);color:${r.monto>0?'#34D399':'var(--muted)'};"
         >${r.monto>0?fmt(r.monto):''}</span>
       </td>
       <td style="text-align:center;">
-        <button onclick="deleteReu('${ks}')" title="Eliminar reunión"
+        <button onclick="deleteReuAt(${i})" title="Eliminar reunión"
           style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:14px;padding:2px 6px;line-height:1;border-radius:4px;"
           onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='none'">🗑</button>
       </td>
@@ -2069,6 +2069,15 @@ function editReu(key, field, val) {
     localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
   }
   renderReus();
+}
+
+function editReuAt(i, field, val) {
+  const r = (window._reuRecs||[])[i];
+  if (r) editReu(getReuKey(r), field, val);
+}
+function deleteReuAt(i) {
+  const r = (window._reuRecs||[])[i];
+  if (r) deleteReu(getReuKey(r));
 }
 
 function deleteReu(key) {
