@@ -69,7 +69,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .stitle{font-size:10px;font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);font-weight:500;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
 
 /* TABLE */
-.twrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem;}
+.twrap{background:var(--s2);border:1px solid var(--border);border-radius:10px;overflow-x:auto;margin-bottom:1.5rem;}
 .twrap table{width:100%;border-collapse:collapse;font-size:12px;}
 .twrap th{background:var(--s1);padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap;position:sticky;top:0;}
 .twrap td{padding:8px 12px;border-bottom:1px solid var(--border);}
@@ -357,7 +357,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
   <div class="cards" id="re-cards"></div>
-  <div class="twrap"><table><thead><tr><th>M/S</th><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto</th><th></th></tr></thead><tbody id="re-tbl"></tbody></table></div>
+  <div class="twrap"><table><thead><tr><th></th><th>M/S</th><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto</th></tr></thead><tbody id="re-tbl"></tbody></table></div>
 </section>
 
 <!-- ═══════ RANKING ═══════ -->
@@ -1546,6 +1546,11 @@ function renderReus() {
   document.getElementById('re-tbl').innerHTML = recs.map((r,i)=>{
     const emp = r.empresa.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     return `<tr>
+      <td style="text-align:center;padding:4px 8px;">
+        <button onclick="deleteReuAt(${i})" title="Eliminar reunión"
+          style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:16px;padding:2px 4px;line-height:1;border-radius:4px;"
+          onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='none'">🗑</button>
+      </td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
       <td><strong>${r.sdr}</strong></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${emp}">${emp}</td>
@@ -1597,11 +1602,6 @@ function renderReus() {
           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
           style="cursor:text;display:inline-block;min-width:40px;padding:1px 4px;border-bottom:1px dashed var(--border2);color:${r.monto>0?'#34D399':'var(--muted)'};"
         >${r.monto>0?fmt(r.monto):''}</span>
-      </td>
-      <td style="text-align:center;">
-        <button onclick="deleteReuAt(${i})" title="Eliminar reunión"
-          style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:14px;padding:2px 6px;line-height:1;border-radius:4px;"
-          onmouseover="this.style.background='#FEE2E2'" onmouseout="this.style.background='none'">🗑</button>
       </td>
     </tr>`;
   }).join('')||'<tr class="empty-row"><td colspan="10">Sin reuniones para este filtro</td></tr>';
