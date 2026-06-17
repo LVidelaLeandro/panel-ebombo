@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v10',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v11',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1879,170 +1879,260 @@ function exportReporte(period) {
     return {sem,total:sr.length,realizadas:sr.filter(r=>r.realizada==='SI').length};
   }).filter(s=>s.total>0) : [];
 
+  // ── Extra data for structured report ──────────────────────────
+  const META_EVENTOS = 20;
+  const META_CARMEN  = 40;
+  const EVENTOS_SDRS = ['Grace','Leandro','Luziana'];
+  const eventosReus  = periodReus.filter(r => EVENTOS_SDRS.includes(r.sdr));
+  const bilitReus    = periodReus.filter(r => r.sdr === 'Carmen');
+  const bdevReus     = periodReus.filter(r => r.canal === 'BDEV');
+  const eventosStats = ['Grace','Leandro','Luziana'].map(sdr => {
+    const reus = eventosReus.filter(r => r.sdr === sdr);
+    if (!reus.length) return null;
+    const real = reus.filter(r=>r.realizada==='SI').length;
+    const tod  = reus.filter(r=>r.realizada==='TODAVIA').length;
+    const pip  = reus.reduce((s,r)=>s+(r.monto||0),0);
+    const cot  = reus.filter(r=>r.cotizacion==='SI').length;
+    const won  = reus.filter(r=>r.estado==='WON').length;
+    const pct  = Math.round(real/META_EVENTOS*100);
+    const semBg = pct>=100?'#1a5c2a':pct>=80?'#4a9e3f':pct>=41?'#e6a817':'#cc0000';
+    const sColor = sdr==='Grace'?'#3a3596':'#22a86e';
+    const cls    = sdr==='Grace'?'grace':'lean';
+    const pe=reus.filter(r=>r.pais==='PERU'), mx=reus.filter(r=>r.pais==='MEXICO'), es=reus.filter(r=>r.pais==='ESPANA');
+    return {sdr,reus,real,tod,pip,cot,won,pct,semBg,sColor,cls,pe,mx,es};
+  }).filter(Boolean);
+  const bilitReal   = bilitReus.filter(r=>r.realizada==='SI').length;
+  const bilitNoShow = bilitReus.filter(r=>r.realizada==='NO'||r.realizada==='REVISAR').length;
+  const bilitTod    = bilitReus.filter(r=>r.realizada==='TODAVIA').length;
+  const bilitWon    = bilitReus.filter(r=>r.estado==='WON').length;
+  const bilitHot    = bilitReus.filter(r=>r.estado==='HOT').length;
+  const bilitPct    = Math.round(bilitReal/(META_CARMEN||1)*100);
+  const bilitSemBg  = bilitPct>=100?'#1a5c2a':bilitPct>=80?'#4a9e3f':bilitPct>=41?'#e6a817':'#cc0000';
+  const bdevByPais  = ['PERU','MEXICO','ESPANA'].map(p=>({
+    pais:p==='PERU'?'🇵🇪 Perú':p==='MEXICO'?'🇲🇽 México':'🇪🇸 España',
+    total:bdevReus.filter(r=>r.pais===p).length,
+    real:bdevReus.filter(r=>r.pais===p&&r.realizada==='SI').length,
+    pip:bdevReus.filter(r=>r.pais===p).reduce((s,r)=>s+(r.monto||0),0)
+  })).filter(x=>x.total>0);
+  const todaviaBySem = {};
+  periodReus.filter(r=>r.realizada==='TODAVIA').forEach(r=>{
+    const k='Sem '+(r.semana||'?');
+    if(!todaviaBySem[k]) todaviaBySem[k]=[];
+    todaviaBySem[k].push(r);
+  });
+  const todaviaEntries = Object.entries(todaviaBySem).sort();
+
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo ${MONTHS[curMonth-1]} ${curYear}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:13.5px;color:#111827;background:#F3F4F6;}
-.wrapper{max-width:900px;margin:0 auto;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.12);}
-.hdr{background:#0D1117;padding:2.5rem 3rem;}
-.hdr-hello{color:#9CA3AF;font-size:13px;font-weight:700;margin-bottom:.6rem;}
-.hdr-intro{color:#D1D5DB;font-size:13px;line-height:1.75;margin-bottom:1.5rem;border-left:3px solid #34D399;padding-left:1rem;}
-.hdr-title{font-size:17px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#34D399;margin-bottom:5px;}
-.hdr-sub{font-size:15px;font-weight:600;color:#F9FAFB;margin-bottom:1.5rem;}
-.hdr-meta{display:flex;flex-wrap:wrap;gap:1.5rem;font-size:11.5px;color:#6B7280;border-top:1px solid #1F2937;padding-top:1rem;}
-.hdr-meta strong{color:#9CA3AF;}
+body{font-family:Arial,'Helvetica Neue',sans-serif;font-size:13px;color:#1f1f2e;background:#f4f3ff;}
+.wrapper{max-width:860px;margin:0 auto;background:#fff;box-shadow:0 4px 24px rgba(58,53,150,.18);}
+.hdr{background:#3a3596;padding:2.5rem 3rem;}
+.hdr-hello{color:#a89ede;font-size:13px;font-weight:700;margin-bottom:.5rem;}
+.hdr-intro{color:#d4cff0;font-size:12.5px;line-height:1.7;margin-bottom:1.5rem;border-left:3px solid #a89ede;padding-left:1rem;}
+.hdr-title{font-size:18px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#fff;margin-bottom:4px;}
+.hdr-sub{font-size:14px;font-weight:600;color:#d4cff0;margin-bottom:1.5rem;}
+.hdr-meta{display:flex;flex-wrap:wrap;gap:1.5rem;font-size:11px;color:#a89ede;border-top:1px solid #4a4498;padding-top:1rem;}
+.hdr-meta strong{color:#d4cff0;}
 .content{padding:2.5rem 3rem;}
 .section{margin-bottom:2.5rem;}
-.sec-hdr{display:flex;align-items:center;gap:12px;margin-bottom:1rem;padding-bottom:8px;border-bottom:2px solid #E5E7EB;}
-.sec-num{background:#0D1117;color:#34D399;min-width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
-.sec-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#111827;}
+.sec-hdr{display:flex;align-items:center;gap:12px;margin-bottom:1.2rem;padding-bottom:8px;border-bottom:2px solid #ede8f8;}
+.sec-num{background:#3a3596;color:#fff;min-width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;}
+.sec-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#3a3596;}
 .cards{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem;}
-.card{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:14px 18px;min-width:110px;}
+.card{background:#f8f7ff;border:1px solid #ede8f8;border-radius:8px;padding:14px 18px;min-width:110px;}
 .card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:4px;}
-.card-val{font-size:28px;font-weight:800;color:#111827;line-height:1;}
-.card-val.g{color:#059669;} .card-val.b{color:#2563EB;} .card-val.o{color:#D97706;} .card-val.r{color:#DC2626;}
+.card-val{font-size:26px;font-weight:800;color:#3a3596;line-height:1;}
+.card-val.g{color:#22a86e;} .card-val.b{color:#3a3596;} .card-val.w{color:#e6a817;} .card-val.r{color:#cc0000;}
+.sdr-card{border-radius:10px;padding:18px 20px;margin-bottom:1rem;border-left:4px solid;}
+.sdr-card.grace{background:#f8f7ff;border-left-color:#3a3596;}
+.sdr-card.lean{background:#f0faf5;border-left-color:#22a86e;}
+.sdr-name{font-size:14px;font-weight:800;margin-bottom:6px;}
+.sdr-name.grace{color:#3a3596;} .sdr-name.lean{color:#22a86e;}
+.sdr-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
+.sdr-stat{font-size:12px;color:#555;}
+.sdr-stat strong{font-size:22px;font-weight:800;}
+.sdr-stat.grace strong{color:#3a3596;} .sdr-stat.lean strong{color:#22a86e;}
+.pbar-wrap{background:#e5e2f8;border-radius:20px;height:7px;overflow:hidden;margin:6px 0 3px;}
+.pbar-fill{height:100%;border-radius:20px;}
+.pct-lbl{font-size:11px;font-weight:700;margin-bottom:6px;}
+.country-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.country-chip{background:#fff;border:1px solid #ede8f8;border-radius:6px;padding:5px 12px;font-size:11px;color:#555;}
+.country-chip strong{color:#3a3596;}
 table{width:100%;border-collapse:collapse;margin-bottom:1rem;font-size:12px;}
-thead tr{background:#0D1117;}
-th{padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
-td{padding:9px 12px;border-bottom:1px solid #F3F4F6;vertical-align:middle;color:#374151;}
+thead tr{background:#3a3596;}
+th{padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+td{padding:9px 12px;border-bottom:1px solid #ede8f8;vertical-align:middle;color:#374151;}
 tr:last-child td{border-bottom:none;}
-.tr-total td{background:#F0F9F4;font-weight:700;border-top:2px solid #D1FAE5;color:#065F46;}
-.g{color:#059669!important;font-weight:700;} .b{color:#2563EB!important;font-weight:700;} .o{color:#D97706!important;font-weight:700;} .r{color:#DC2626!important;font-weight:700;}
+tbody tr:nth-child(even) td{background:#ede8f8;}
+.tr-total td{background:#3a359614;font-weight:700;border-top:2px solid #a89ede;color:#3a3596;}
+.g{color:#22a86e!important;font-weight:700;} .vio{color:#3a3596!important;font-weight:700;} .w{color:#e6a817!important;font-weight:700;} .r{color:#cc0000!important;font-weight:700;}
 .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
 .pwon{background:#D1FAE5;color:#065F46;} .plost{background:#FEE2E2;color:#991B1B;} .phot{background:#FEF3C7;color:#92400E;}
 .nodata{color:#9CA3AF;font-style:italic;font-size:12px;padding:8px 0;}
-.ftr{background:#0D1117;padding:1.5rem 3rem;}
-.ftr-bye{color:#D1D5DB;font-size:13px;line-height:1.7;margin-bottom:1rem;}
-.ftr-sign{color:#6B7280;font-size:11px;border-top:1px solid #1F2937;padding-top:.75rem;}
-.ftr-sign strong{color:#9CA3AF;}
+.ftr{background:#3a3596;padding:1.5rem 3rem;}
+.ftr-bye{color:#d4cff0;font-size:13px;line-height:1.7;margin-bottom:1rem;}
+.ftr-sign{color:#a89ede;font-size:11px;border-top:1px solid #4a4498;padding-top:.75rem;}
+.ftr-sign strong{color:#d4cff0;}
 @media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 </style></head><body>
 <div class="wrapper">
 
 <div class="hdr">
-  <div class="hdr-hello">Hola team!</div>
-  <div class="hdr-intro">Les traigo el reporte ${period==='week'?'de la semana — a puertas de cerrar el mes está bueno reflexionar sobre cómo vamos para ajustar donde tengamos que ajustar':'de cierre de mes — a continuación el detalle completo de la actividad del equipo'}, con toda la actitud!</div>
-  <div class="hdr-title">Reporte ${period==='week'?'Semanal':'Mensual'} SDR Outbound</div>
+  <div class="hdr-hello">Hola team 👋</div>
+  <div class="hdr-intro">${period==='week'?'Les traigo el reporte de la semana — a puertas de cerrar el mes está bueno reflexionar sobre cómo vamos para ajustar donde tengamos que ajustar.':'Acá va el cierre mensual completo — los números hablan por sí solos, con contexto donde importa.'}</div>
+  <div class="hdr-title">Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo</div>
   <div class="hdr-sub">${period==='week'?`Semana ${curSemana} — `:``}${MONTHS[curMonth-1]} ${curYear}</div>
   <div class="hdr-meta">
     <span><strong>Emisión:</strong> ${dateLabel}</span>
-    <span><strong>Equipo:</strong> SDR Outbound</span>
-    <span><strong>Mercados:</strong> Perú · México · España</span>
+    <span><strong>Equipo:</strong> SDR Outbound + Bilit + BDEV</span>
+    <span><strong>Mercados Eventos:</strong> Perú · México · España</span>
+    <span><strong>Mercado Bilit:</strong> Perú</span>
   </div>
 </div>
 
 <div class="content">
 
+<!-- 1. RESUMEN -->
 <div class="section">
   <div class="sec-hdr"><span class="sec-num">1</span><span class="sec-title">Resumen Ejecutivo</span></div>
   <div class="cards">
-    <div class="card"><div class="card-lbl">Reuniones</div><div class="card-val g">${totAgendadas}</div></div>
+    <div class="card"><div class="card-lbl">Reuniones totales</div><div class="card-val b">${totAgendadas}</div></div>
     <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val g">${totRealizadas}</div></div>
-    <div class="card"><div class="card-lbl">Todavía</div><div class="card-val o">${totTodavia}</div></div>
+    <div class="card"><div class="card-lbl">Todavía</div><div class="card-val w">${totTodavia}</div></div>
     <div class="card"><div class="card-lbl">Con cotización</div><div class="card-val b">${totConCot}</div></div>
     <div class="card"><div class="card-lbl">WON</div><div class="card-val g">${totWON}</div></div>
-    <div class="card"><div class="card-lbl">LOST</div><div class="card-val r">${totLOST}</div></div>
-    <div class="card"><div class="card-lbl">HOT</div><div class="card-val o">${totHOT}</div></div>
-    <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val b">${money(totPipeline)}</div></div>
-    <div class="card"><div class="card-lbl">Contactos campaña</div><div class="card-val">${totCampCont.toLocaleString()}</div></div>
+    <div class="card"><div class="card-lbl">HOT</div><div class="card-val w">${totHOT}</div></div>
+    <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val g">${money(totPipeline)}</div></div>
   </div>
 </div>
 
+<!-- 2. EVENTOS: GRACE + LEANDRO -->
 <div class="section">
-  <div class="sec-hdr"><span class="sec-num">2</span><span class="sec-title">Avance de Reuniones — Por SDR</span></div>
-  ${sdrStats.length ? `<table>
-    <thead><tr><th>SDR</th><th>Agendadas</th><th>Realizadas</th><th>Todavía</th><th>Con cot.</th><th>WON</th><th>LOST</th><th>HOT</th><th>Pipeline USD</th><th>Contactos</th></tr></thead>
+  <div class="sec-hdr"><span class="sec-num">2</span><span class="sec-title">Eventos — Grace y Leandro</span></div>
+  ${eventosStats.length ? eventosStats.map(s=>`
+  <div class="sdr-card ${s.cls}">
+    <div class="sdr-name ${s.cls}">${s.sdr}</div>
+    <div class="sdr-row">
+      <div class="sdr-stat ${s.cls}"><strong>${s.reus.length}</strong><br>agendadas</div>
+      <div class="sdr-stat ${s.cls}"><strong>${s.real}</strong><br>realizadas</div>
+      <div class="sdr-stat"><strong style="color:#e6a817">${s.tod}</strong><br>todavía</div>
+      ${s.cot?`<div class="sdr-stat"><strong style="color:#3a3596">${s.cot}</strong><br>con cot.</div>`:''}
+      ${s.won?`<div class="sdr-stat"><strong style="color:#22a86e">${s.won}</strong><br>WON</div>`:''}
+      ${s.pip?`<div class="sdr-stat"><strong style="color:#22a86e">${money(s.pip)}</strong><br>pipeline</div>`:''}
+    </div>
+    <div class="pct-lbl" style="color:${s.semBg}">${s.real} realizadas de meta ${META_EVENTOS} · ${s.pct}%${s.pct>=100?' ✓ meta cumplida':s.pct>=80?' — buena dirección':s.pct>=41?' — atención':' — urgente mejorar'}</div>
+    <div class="pbar-wrap"><div class="pbar-fill" style="width:${Math.min(s.pct,100)}%;background:${s.semBg};"></div></div>
+    <div class="country-row">
+      ${s.pe.length?`<div class="country-chip">🇵🇪 Perú <strong>${s.pe.length}</strong>${s.pe.filter(r=>r.realizada==='SI').length?` · ${s.pe.filter(r=>r.realizada==='SI').length} real.`:''}</div>`:''}
+      ${s.mx.length?`<div class="country-chip">🇲🇽 México <strong>${s.mx.length}</strong>${s.mx.filter(r=>r.realizada==='SI').length?` · ${s.mx.filter(r=>r.realizada==='SI').length} real.`:''}</div>`:''}
+      ${s.es.length?`<div class="country-chip">🇪🇸 España <strong>${s.es.length}</strong>${s.es.filter(r=>r.realizada==='SI').length?` · ${s.es.filter(r=>r.realizada==='SI').length} real.`:''}</div>`:''}
+    </div>
+  </div>`).join('') : '<p class="nodata">Sin reuniones de Eventos para este período.</p>'}
+  ${eventosStats.length>1?`<table style="margin-top:1rem;">
+    <thead><tr><th>SDR</th><th>🇵🇪 Perú</th><th>🇲🇽 México</th><th>🇪🇸 España</th><th>Total</th><th>Meta</th><th>%</th><th>Realizadas</th><th>Pipeline</th></tr></thead>
     <tbody>
-    ${sdrStats.map(s=>`<tr>
-      <td><strong>${s.sdr}</strong></td>
-      <td class="b">${s.agendadas||'—'}</td>
-      <td class="g">${s.realizadas||'—'}</td>
-      <td class="o">${s.todavia||'—'}</td>
-      <td>${s.conCot||'—'}</td>
-      <td class="g">${s.won||'—'}</td>
-      <td class="r">${s.lost||'—'}</td>
-      <td class="o">${s.hot||'—'}</td>
-      <td class="g">${s.pipeline ? money(s.pipeline) : '—'}</td>
-      <td>${s.campContactos ? s.campContactos.toLocaleString() : '—'}</td>
+    ${eventosStats.map(s=>`<tr>
+      <td><strong style="color:${s.sColor}">${s.sdr}</strong></td>
+      <td>${s.pe.length||'—'}</td><td>${s.mx.length||'—'}</td><td>${s.es.length||'—'}</td>
+      <td class="vio"><strong>${s.reus.length}</strong></td>
+      <td>${META_EVENTOS}</td>
+      <td style="color:${s.semBg};font-weight:700">${s.pct}%</td>
+      <td class="g">${s.real||'—'}</td>
+      <td class="g">${s.pip?money(s.pip):'—'}</td>
     </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL EQUIPO</td>
-      <td>${totAgendadas}</td><td>${totRealizadas}</td><td>${totTodavia}</td>
-      <td>${totConCot}</td><td>${totWON}</td><td>${totLOST}</td><td>${totHOT}</td>
-      <td>${totPipeline ? money(totPipeline) : '—'}</td><td>${totCampCont ? totCampCont.toLocaleString() : '—'}</td>
+    <tr class="tr-total"><td>TOTAL</td>
+      <td>${eventosReus.filter(r=>r.pais==='PERU').length||'—'}</td>
+      <td>${eventosReus.filter(r=>r.pais==='MEXICO').length||'—'}</td>
+      <td>${eventosReus.filter(r=>r.pais==='ESPANA').length||'—'}</td>
+      <td>${eventosReus.length}</td><td>${META_EVENTOS*eventosStats.length}</td>
+      <td>${Math.round(eventosReus.filter(r=>r.realizada==='SI').length/(META_EVENTOS*eventosStats.length)*100)}%</td>
+      <td>${eventosReus.filter(r=>r.realizada==='SI').length||'—'}</td>
+      <td>${eventosReus.reduce((s,r)=>s+(r.monto||0),0)?money(eventosReus.reduce((s,r)=>s+(r.monto||0),0)):'—'}</td>
     </tr>
     </tbody>
-  </table>` : '<p class="nodata">Sin reuniones registradas para el período.</p>'}
-</div>
-
-${period==='month' && semanasData.length ? `<div class="section">
-  <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Evolución Semanal de Reuniones</span></div>
+  </table>`:''}
+  ${canalEntries.filter(([k])=>k!=='INBOUND').length?`
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin:1rem 0 .5rem;">Canal de agendamiento</p>
+  <div class="cards" style="margin-bottom:0;">
+    ${canalEntries.filter(([k])=>k!=='INBOUND').map(([k,v])=>`<div class="card" style="min-width:90px;padding:10px 14px;">
+      <div class="card-lbl">${k}</div>
+      <div class="card-val b" style="font-size:20px;">${v}</div>
+      <div style="font-size:10px;color:#9CA3AF;">${totAgendadas?Math.round(v/totAgendadas*100):0}%</div>
+    </div>`).join('')}
+  </div>`:''}
+  ${todaviaEntries.length?`
+  <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin:1.2rem 0 .5rem;">Proyección — reuniones TODAVÍA</p>
   <table>
-    <thead><tr><th>Semana</th><th>Reuniones agendadas</th><th>Realizadas</th></tr></thead>
-    <tbody>
-    ${semanasData.map(s=>`<tr>
-      <td><strong>Semana ${s.sem}</strong></td>
-      <td class="b">${s.total}</td>
-      <td class="g">${s.realizadas||'—'}</td>
-    </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td></tr>
+    <thead><tr><th>Semana</th><th>SDR</th><th>Empresa</th><th>País</th></tr></thead>
+    <tbody>${todaviaEntries.flatMap(([sem,rr])=>rr.map((r,i)=>`<tr>
+      <td>${i===0?`<strong>${sem}</strong>`:''}</td>
+      <td>${r.sdr}</td><td>${r.empresa}</td>
+      <td>${r.pais==='PERU'?'🇵🇪':r.pais==='MEXICO'?'🇲🇽':'🇪🇸'} ${r.pais}</td>
+    </tr>`)).join('')}
     </tbody>
-  </table>
-</div>` : ''}
-
-<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${period==='month'?'4':'3'}</span><span class="sec-title">Reuniones y Pipeline por País</span></div>
-  ${paisStats.length ? `<table>
-    <thead><tr><th>País</th><th>Reuniones</th><th>Realizadas</th><th>Con cot.</th><th>% conv.</th><th>Pipeline USD</th></tr></thead>
-    <tbody>
-    ${paisStats.map(p=>`<tr>
-      <td><strong>${p.label}</strong></td>
-      <td class="b">${p.agendadas}</td>
-      <td class="g">${p.realizadas||'—'}</td>
-      <td>${p.conCot||'—'}</td>
-      <td class="${p.conv>=50?'g':p.conv>=25?'o':'r'}">${p.realizadas ? p.conv+'%' : '—'}</td>
-      <td class="g">${p.pipeline ? money(p.pipeline) : '—'}</td>
-    </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td>
-      <td>${totConCot}</td>
-      <td>${totRealizadas ? Math.round(totConCot/totRealizadas*100)+'%' : '—'}</td>
-      <td>${totPipeline ? money(totPipeline) : '—'}</td>
-    </tr>
-    </tbody>
-  </table>` : '<p class="nodata">Sin reuniones por país en el período.</p>'}
+  </table>`:''}
 </div>
 
-<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${period==='month'?'5':'4'}</span><span class="sec-title">Canal de Agendamiento y Conversión</span></div>
-  ${canalEntries.length ? `<table>
-    <thead><tr><th>Canal / Origen</th><th>Reuniones</th><th>% del total</th></tr></thead>
-    <tbody>
-    ${canalEntries.map(([k,v])=>`<tr>
-      <td><strong>${k}</strong></td>
-      <td class="b">${v}</td>
-      <td>${totAgendadas ? Math.round(v/totAgendadas*100)+'%' : '—'}</td>
+<!-- 3. BILIT — CARMEN -->
+${bilitReus.length?`<div class="section">
+  <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Bilit — Carmen</span></div>
+  <div class="sdr-card lean">
+    <div class="sdr-name lean">Carmen · Bilit inbound</div>
+    <div class="sdr-row">
+      <div class="sdr-stat lean"><strong>${bilitReus.length}</strong><br>demos</div>
+      <div class="sdr-stat lean"><strong>${bilitReal}</strong><br>realizadas</div>
+      ${bilitNoShow?`<div class="sdr-stat"><strong style="color:#cc0000">${bilitNoShow}</strong><br>no-show</div>`:''}
+      <div class="sdr-stat"><strong style="color:#e6a817">${bilitTod}</strong><br>todavía</div>
+      ${bilitWon?`<div class="sdr-stat"><strong style="color:#22a86e">${bilitWon}</strong><br>WON</div>`:''}
+      ${bilitHot?`<div class="sdr-stat"><strong style="color:#e6a817">${bilitHot}</strong><br>HOT</div>`:''}
+    </div>
+    <div class="pct-lbl" style="color:${bilitSemBg}">${bilitReal} demos realizadas de meta ${META_CARMEN} · ${bilitPct}%${bilitPct>=80?' — en camino':bilitPct>=41?' — atención':' — urgente'}</div>
+    <div class="pbar-wrap"><div class="pbar-fill" style="width:${Math.min(bilitPct,100)}%;background:${bilitSemBg};"></div></div>
+    ${bilitNoShow?`<p style="font-size:11.5px;color:#555;margin-top:8px;">Tasa de no-show: <strong style="color:#cc0000">${Math.round(bilitNoShow/(bilitReal+bilitNoShow||1)*100)}%</strong> (${bilitNoShow} de ${bilitReal+bilitNoShow} demos)</p>`:''}
+  </div>
+</div>`:''}
+
+<!-- 4. BDEV -->
+${bdevReus.length?`<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${bilitReus.length?'4':'3'}</span><span class="sec-title">BDEV + Inbound orgánico</span></div>
+  <div class="cards">
+    <div class="card"><div class="card-lbl">Reuniones BDEV</div><div class="card-val b">${bdevReus.length}</div></div>
+    <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val g">${bdevReus.filter(r=>r.realizada==='SI').length}</div></div>
+    ${bdevReus.reduce((s,r)=>s+(r.monto||0),0)?`<div class="card"><div class="card-lbl">Pipeline</div><div class="card-val g">${money(bdevReus.reduce((s,r)=>s+(r.monto||0),0))}</div></div>`:''}
+  </div>
+  ${bdevByPais.length?`<table>
+    <thead><tr><th>País</th><th>Reuniones</th><th>Realizadas</th><th>Pipeline USD</th></tr></thead>
+    <tbody>${bdevByPais.map(p=>`<tr>
+      <td><strong>${p.pais}</strong></td>
+      <td class="vio">${p.total}</td>
+      <td class="g">${p.real||'—'}</td>
+      <td class="g">${p.pip?money(p.pip):'—'}</td>
     </tr>`).join('')}
     </tbody>
-  </table>` : '<p class="nodata">Sin datos de canal para el período.</p>'}
-</div>
+  </table>`:''}
+</div>`:''}
 
-<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${period==='month'?'6':'5'}</span><span class="sec-title">Campañas de Outreach — Contactos Impactados</span></div>
-  ${campPeriod.length ? `<table>
+<!-- 5. CAMPAÑAS -->
+${campPeriod.length?`<div class="section">
+  <div class="sec-hdr"><span class="sec-num">${[bilitReus.length,bdevReus.length].filter(Boolean).length+3}</span><span class="sec-title">Campañas de Outreach</span></div>
+  <table>
     <thead><tr><th>Campaña</th><th>SDR</th><th>País</th><th>Contactos</th></tr></thead>
     <tbody>
     ${campPeriod.map(c=>`<tr>
       <td style="font-size:11.5px;">${c.nombre}</td>
       <td>${c.sdr}</td><td>${c.pais}</td>
-      <td class="b"><strong>${c.total.toLocaleString()}</strong></td>
+      <td class="vio"><strong>${c.total.toLocaleString()}</strong></td>
     </tr>`).join('')}
     <tr class="tr-total"><td colspan="3">TOTAL</td><td>${totCampCont.toLocaleString()}</td></tr>
     </tbody>
-  </table>` : '<p class="nodata">Sin contactos de campaña cargados para este período.</p>'}
-</div>
+  </table>
+</div>`:''}
 
+<!-- 6. DETALLE -->
 <div class="section">
-  <div class="sec-hdr"><span class="sec-num">${period==='month'?'7':'6'}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
+  <div class="sec-hdr"><span class="sec-num">${[eventosStats.length,bilitReus.length,bdevReus.length,campPeriod.length].filter(Boolean).length+2}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
   ${periodReus.length ? `<table>
     <thead><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr></thead>
     <tbody>
@@ -2051,20 +2141,35 @@ ${period==='month' && semanasData.length ? `<div class="section">
       <td><strong>${r.empresa}</strong></td>
       <td>${dash(r.pais)}</td>
       <td>${dash(r.canal)}</td>
-      <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'o':'r'}">${r.realizada||'—'}</td>
+      <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'w':'r'}">${r.realizada||'—'}</td>
       <td class="${r.cotizacion==='SI'?'g':''}">${r.cotizacion||'—'}</td>
       <td>${pill(r.estado)}</td>
       <td class="g">${money(r.monto)}</td>
     </tr>`).join('')}
     </tbody>
-  </table>` : '<p class="nodata">Sin reuniones registradas para este período.</p>'}
+  </table>` : '<p class="nodata">Sin reuniones para este período.</p>'}
 </div>
+
+${period==='month'&&semanasData.length?`<div class="section">
+  <div class="sec-hdr"><span class="sec-num">+</span><span class="sec-title">Evolución Semanal del Mes</span></div>
+  <table>
+    <thead><tr><th>Semana</th><th>Agendadas</th><th>Realizadas</th></tr></thead>
+    <tbody>
+    ${semanasData.map(s=>`<tr>
+      <td><strong>Semana ${s.sem}</strong></td>
+      <td class="vio">${s.total}</td>
+      <td class="g">${s.realizadas||'—'}</td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td></tr>
+    </tbody>
+  </table>
+</div>`:''}
 
 </div>
 
 <div class="ftr">
-  <div class="ftr-bye">Gracias team! Que tengan un excelente fin de semana, volvemos recargados 💪</div>
-  <div class="ftr-sign"><strong>ebombo — SDR Outbound</strong> &nbsp;·&nbsp; Reporte Interno ${MONTHS[curMonth-1]} ${curYear} &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Generado el ${dateLabel}</div>
+  <div class="ftr-bye">Gracias team! ${period==='week'?'Buen fin de semana, volvemos recargados 💪':'Cerramos el mes — a seguir construyendo 🚀'}</div>
+  <div class="ftr-sign"><strong>eBombo SDR</strong> &nbsp;·&nbsp; Reporte Interno ${MONTHS[curMonth-1]} ${curYear} &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Generado el ${dateLabel}</div>
 </div>
 
 </div>
