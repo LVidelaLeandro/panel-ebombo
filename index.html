@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v6',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v7',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1082,11 +1082,11 @@ function renderSdrCanalChart(recs) {
     },
     options: { ...CHART_DEFAULTS,
       scales: {
-        x: { stacked:true, ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+        x: { stacked:true, ticks:{ font:{size:12}, color:'#F9FAFB' }, grid:{ display:false } },
         y: { stacked:true, ticks:{ font:{size:10}, color:'#6B7280' }, grid:{ color:'rgba(255,255,255,0.04)' } },
       },
       plugins: {
-        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'var(--text)', boxWidth:10, padding:12 } },
+        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'#F9FAFB', boxWidth:10, padding:12 } },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}` } }
       }
     }
@@ -1094,12 +1094,7 @@ function renderSdrCanalChart(recs) {
 }
 
 function renderCanalChart(reus) {
-  const CANAL_ORDER  = ['REPLY','INBOUND','LinkedIn','Correo','Llamada','WhatsApp','Otros','PROSPECCION','LLAMADA','LINKEDIN'];
-  const CANAL_COLORS = {
-    REPLY:'#60A5FA', INBOUND:'#2DD4BF',
-    LinkedIn:'#C084FC', Correo:'#38BDF8', Llamada:'#FB923C', WhatsApp:'#34D399', Otros:'#9CA3AF',
-    PROSPECCION:'#34D399', LLAMADA:'#FB923C', LINKEDIN:'#C084FC',
-  };
+  const CANAL_ORDER = ['REPLY','PROSPECCION','INBOUND','BDEV','LinkedIn','Correo','Llamadas','Llamada','WhatsApp','Otros'];
   const counts = {};
   reus.forEach(r => { if (r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
   const total = Object.values(counts).reduce((s,v)=>s+v, 0);
@@ -1109,7 +1104,6 @@ function renderCanalChart(reus) {
     canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
     return;
   }
-  // Ordenar: primero los del orden definido, luego el resto
   const entries = [
     ...CANAL_ORDER.filter(k => counts[k]),
     ...Object.keys(counts).filter(k => !CANAL_ORDER.includes(k))
@@ -1136,7 +1130,7 @@ function renderCanalChart(reus) {
       indexAxis: 'y',
       scales: {
         x: { beginAtZero:true, ticks:{ font:{size:10}, color:'#6B7280', stepSize:1 }, grid:{ color:'rgba(255,255,255,0.04)' } },
-        y: { ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+        y: { ticks:{ font:{size:12}, color:'#F9FAFB' }, grid:{ display:false } },
       },
       plugins: {
         legend: { display: false },
@@ -1192,7 +1186,7 @@ function renderOBIBChart(reus) {
         legend:{
           display:true, position:'bottom',
           labels:{
-            font:{size:11}, color:'var(--text)', boxWidth:12, padding:16,
+            font:{size:11}, color:'#F9FAFB', boxWidth:12, padding:16,
             generateLabels(ch){
               return ch.data.labels.map((lbl,i)=>{
                 const val=ch.data.datasets[0].data[i];
@@ -1234,11 +1228,11 @@ function renderReuSdrChart(reus) {
     },
     options: { ...CHART_DEFAULTS,
       scales: {
-        x: { stacked:true, ticks:{ font:{size:12}, color:'var(--text)' }, grid:{ display:false } },
+        x: { stacked:true, ticks:{ font:{size:12}, color:'#F9FAFB' }, grid:{ display:false } },
         y: { stacked:true, ticks:{ font:{size:10}, color:'#6B7280' }, grid:{ color:'rgba(255,255,255,0.04)' } },
       },
       plugins: {
-        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'var(--text)', boxWidth:10, padding:12 } },
+        legend: { display:true, position:'bottom', labels:{ font:{size:11}, color:'#F9FAFB', boxWidth:10, padding:12 } },
         tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}` } }
       }
     }
