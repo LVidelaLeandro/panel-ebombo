@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v13',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v14',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1856,47 +1856,6 @@ function exportReporte(period) {
       n: periodReus.filter(r=>r.sdr===sdr&&r.canal===canal).length
     })).filter(x=>x.n>0)
   }));
-  // Eventos: weekly, country-vs-meta, pipeline, canal breakdown
-  const evSemanas = [...new Set(eventosReus.map(r=>r.semana))].sort((a,b)=>a-b);
-  const evWeekRows = evSemanas.map(sem => {
-    const sr = eventosReus.filter(r=>r.semana===sem);
-    return {
-      sem,
-      allTod: sr.length>0 && sr.every(r=>r.realizada==='TODAVIA'),
-      bySDR: eventosStats.map(s => ({
-        sdr:s.sdr, sColor:s.sColor,
-        real: s.reus.filter(r=>r.semana===sem&&r.realizada==='SI').length,
-        tod:  s.reus.filter(r=>r.semana===sem&&r.realizada==='TODAVIA').length
-      })),
-      totalReal: sr.filter(r=>r.realizada==='SI').length,
-      totalTod:  sr.filter(r=>r.realizada==='TODAVIA').length
-    };
-  });
-  const META_POR_PAIS = {PERU:6,MEXICO:7,ESPANA:7};
-  const evPaisRows = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
-    label:l, meta:META_POR_PAIS[k],
-    sdrs: eventosStats.map(s => {
-      const n = s.reus.filter(r=>r.pais===k&&r.realizada==='SI').length;
-      const tot = s.reus.filter(r=>r.pais===k).length;
-      const pct = Math.round(n/META_POR_PAIS[k]*100);
-      const col = pct>=100?'#1a5c2a':pct>=80?'#4a9e3f':pct>=41?'#e6a817':'#cc0000';
-      return {sdr:s.sdr, sColor:s.sColor, n, tot, pct, col};
-    })
-  }));
-  const evPipDeals = eventosReus.filter(r=>r.monto>0).sort((a,b)=>b.monto-a.monto);
-  const evPipPais = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
-    label:l, total: eventosReus.filter(r=>r.pais===k).reduce((s,r)=>s+(r.monto||0),0)
-  })).filter(p=>p.total>0);
-  const evPipMax = Math.max(...evPipPais.map(p=>p.total),1);
-  const evRealReus = eventosReus.filter(r=>r.realizada==='SI');
-  const evCanalList = [...new Set(evRealReus.map(r=>r.canal).filter(Boolean))];
-  const evCanalRows = evCanalList.map(canal => {
-    const sems = evSemanas.map(sem => evRealReus.filter(r=>r.semana===sem&&r.canal===canal).length);
-    const tot = evRealReus.filter(r=>r.canal===canal).length;
-    const pct = evRealReus.length ? Math.round(tot/evRealReus.length*100) : 0;
-    return {canal, sems, tot, pct};
-  }).sort((a,b)=>b.tot-a.tot);
-
   const paisMap = { Mexico:'México', Peru:'Perú', Spain:'España' };
   const paisStats = ['Mexico','Peru','Spain'].map(pais => {
     const preus = periodReus.filter(r => r.pais === pais);
@@ -1970,6 +1929,47 @@ function exportReporte(period) {
     todaviaBySem[k].push(r);
   });
   const todaviaEntries = Object.entries(todaviaBySem).sort();
+
+  // Eventos: weekly, country-vs-meta, pipeline, canal breakdown
+  const evSemanas = [...new Set(eventosReus.map(r=>r.semana))].sort((a,b)=>a-b);
+  const evWeekRows = evSemanas.map(sem => {
+    const sr = eventosReus.filter(r=>r.semana===sem);
+    return {
+      sem,
+      allTod: sr.length>0 && sr.every(r=>r.realizada==='TODAVIA'),
+      bySDR: eventosStats.map(s => ({
+        sdr:s.sdr, sColor:s.sColor,
+        real: s.reus.filter(r=>r.semana===sem&&r.realizada==='SI').length,
+        tod:  s.reus.filter(r=>r.semana===sem&&r.realizada==='TODAVIA').length
+      })),
+      totalReal: sr.filter(r=>r.realizada==='SI').length,
+      totalTod:  sr.filter(r=>r.realizada==='TODAVIA').length
+    };
+  });
+  const META_POR_PAIS = {PERU:6,MEXICO:7,ESPANA:7};
+  const evPaisRows = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
+    label:l, meta:META_POR_PAIS[k],
+    sdrs: eventosStats.map(s => {
+      const n = s.reus.filter(r=>r.pais===k&&r.realizada==='SI').length;
+      const tot = s.reus.filter(r=>r.pais===k).length;
+      const pct = Math.round(n/META_POR_PAIS[k]*100);
+      const col = pct>=100?'#1a5c2a':pct>=80?'#4a9e3f':pct>=41?'#e6a817':'#cc0000';
+      return {sdr:s.sdr, sColor:s.sColor, n, tot, pct, col};
+    })
+  }));
+  const evPipDeals = eventosReus.filter(r=>r.monto>0).sort((a,b)=>b.monto-a.monto);
+  const evPipPais = [{k:'PERU',l:'🇵🇪 Perú'},{k:'MEXICO',l:'🇲🇽 México'},{k:'ESPANA',l:'🇪🇸 España'}].map(({k,l}) => ({
+    label:l, total: eventosReus.filter(r=>r.pais===k).reduce((s,r)=>s+(r.monto||0),0)
+  })).filter(p=>p.total>0);
+  const evPipMax = Math.max(...evPipPais.map(p=>p.total),1);
+  const evRealReus = eventosReus.filter(r=>r.realizada==='SI');
+  const evCanalList = [...new Set(evRealReus.map(r=>r.canal).filter(Boolean))];
+  const evCanalRows = evCanalList.map(canal => {
+    const sems = evSemanas.map(sem => evRealReus.filter(r=>r.semana===sem&&r.canal===canal).length);
+    const tot = evRealReus.filter(r=>r.canal===canal).length;
+    const pct = evRealReus.length ? Math.round(tot/evRealReus.length*100) : 0;
+    return {canal, sems, tot, pct};
+  }).sort((a,b)=>b.tot-a.tot);
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo ${MONTHS[curMonth-1]} ${curYear}</title>
