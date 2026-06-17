@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v11',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v12',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -1862,6 +1862,15 @@ function exportReporte(period) {
   const canalCount = {};
   periodReus.forEach(r => { if(r.canal) canalCount[r.canal]=(canalCount[r.canal]||0)+1; });
   const canalEntries = Object.entries(canalCount).sort((a,b)=>b[1]-a[1]);
+  const canalSdrNames = [...new Set(periodReus.map(r=>r.sdr))].sort();
+  const canalSdrData = canalEntries.map(([canal]) => ({
+    canal,
+    total: canalCount[canal],
+    sdrs: canalSdrNames.map(sdr => ({
+      sdr,
+      n: periodReus.filter(r=>r.sdr===sdr&&r.canal===canal).length
+    })).filter(x=>x.n>0)
+  }));
 
   const paisMap = { Mexico:'México', Peru:'Perú', Spain:'España' };
   const paisStats = ['Mexico','Peru','Spain'].map(pais => {
@@ -2091,9 +2100,30 @@ tr:last-child td{border-bottom:none;}
   </table>`:''}
 </div>
 
-<!-- 3. BILIT — CARMEN -->
+<!-- 3. CANAL -->
+${canalSdrData.length?`<div class="section">
+  <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Canal de agendamiento</span></div>
+  <table>
+    <thead><tr><th>Canal</th><th>Reuniones</th><th>%</th><th>Por SDR</th></tr></thead>
+    <tbody>
+    ${canalSdrData.map(({canal,total,sdrs})=>`<tr>
+      <td><strong>${canal}</strong></td>
+      <td class="vio">${total}</td>
+      <td style="color:#6B7280;">${totAgendadas?Math.round(total/totAgendadas*100):0}%
+        <div style="background:#e5e2f8;border-radius:4px;height:5px;margin-top:3px;overflow:hidden;">
+          <div style="background:#3a3596;height:100%;width:${totAgendadas?Math.round(total/totAgendadas*100):0}%;"></div>
+        </div>
+      </td>
+      <td style="font-size:11px;color:#555;">${sdrs.map(x=>`<span style="margin-right:8px;"><strong>${x.sdr}</strong> ${x.n}</span>`).join('')}</td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>100%</td><td></td></tr>
+    </tbody>
+  </table>
+</div>`:''}
+
+<!-- 4. BILIT — CARMEN -->
 ${bilitReus.length?`<div class="section">
-  <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Bilit — Carmen</span></div>
+  <div class="sec-hdr"><span class="sec-num">${canalSdrData.length?'4':'3'}</span><span class="sec-title">Bilit — Carmen</span></div>
   <div class="sdr-card lean">
     <div class="sdr-name lean">Carmen · Bilit inbound</div>
     <div class="sdr-row">
@@ -2110,9 +2140,9 @@ ${bilitReus.length?`<div class="section">
   </div>
 </div>`:''}
 
-<!-- 4. BDEV -->
+<!-- 5. BDEV -->
 ${bdevReus.length?`<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${bilitReus.length?'4':'3'}</span><span class="sec-title">BDEV + Inbound orgánico</span></div>
+  <div class="sec-hdr"><span class="sec-num">${[canalSdrData.length,bilitReus.length].filter(Boolean).length+3}</span><span class="sec-title">BDEV + Inbound orgánico</span></div>
   <div class="cards">
     <div class="card"><div class="card-lbl">Reuniones BDEV</div><div class="card-val b">${bdevReus.length}</div></div>
     <div class="card"><div class="card-lbl">Realizadas</div><div class="card-val g">${bdevReus.filter(r=>r.realizada==='SI').length}</div></div>
@@ -2130,9 +2160,9 @@ ${bdevReus.length?`<div class="section">
   </table>`:''}
 </div>`:''}
 
-<!-- 5. CAMPAÑAS -->
+<!-- 6. CAMPAÑAS -->
 ${campPeriod.length?`<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${[bilitReus.length,bdevReus.length].filter(Boolean).length+3}</span><span class="sec-title">Campañas de Outreach</span></div>
+  <div class="sec-hdr"><span class="sec-num">${[canalSdrData.length,bilitReus.length,bdevReus.length].filter(Boolean).length+3}</span><span class="sec-title">Campañas de Outreach</span></div>
   <table>
     <thead><tr><th>Campaña</th><th>SDR</th><th>País</th><th>Contactos</th></tr></thead>
     <tbody>
@@ -2146,9 +2176,9 @@ ${campPeriod.length?`<div class="section">
   </table>
 </div>`:''}
 
-<!-- 6. DETALLE -->
+<!-- 7. DETALLE -->
 <div class="section">
-  <div class="sec-hdr"><span class="sec-num">${[eventosStats.length,bilitReus.length,bdevReus.length,campPeriod.length].filter(Boolean).length+2}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
+  <div class="sec-hdr"><span class="sec-num">${[canalSdrData.length,bilitReus.length,bdevReus.length,campPeriod.length].filter(Boolean).length+3}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
   ${periodReus.length ? `<table>
     <thead><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr></thead>
     <tbody>
