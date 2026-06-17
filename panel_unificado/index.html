@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v8',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v9',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -298,6 +298,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <!-- ── BDEV ── -->
   <div class="stitle" style="margin-bottom:.75rem;margin-top:1.5rem;">BDEV</div>
   <div class="kpi-grid" id="d-bdev-cards"></div>
+  <div class="dash-grid" style="margin-bottom:1.5rem;">
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#FB923C;"></span>BDEV por país</div>
+      <div class="chart-inner" style="height:180px;"><canvas id="bdev-pais-chart"></canvas></div>
+    </div>
+    <div></div>
+  </div>
 </section>
 
 <!-- ═══════ MI PANEL (SDR individual editable) ═══════ -->
@@ -476,6 +483,7 @@ let canalChartInst = null;
 let reuSdrChartInst = null;
 let sdrCanalChartInst = null;
 let obibChartInst = null;
+let bdevChartInst = null;
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -1024,6 +1032,7 @@ function renderDash() {
   renderReuSdrChart(reus);
   renderOBIBChart(reus);
   renderFunnel(t.contactados, t.respuestas, reus.length, realizadas, conCot, won);
+  renderBDEVChart(reus);
 
   // Panel BDEV
   const bdevReus = reus.filter(r => r.canal === 'BDEV');
@@ -1121,10 +1130,11 @@ function renderCanalChart(reus) {
     canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
     return;
   }
+  const ALWAYS_SHOW = new Set(['Llamadas','LinkedIn']);
   const entries = [
-    ...CANAL_ORDER.filter(k => counts[k]),
-    ...Object.keys(counts).filter(k => !CANAL_ORDER.includes(k))
-  ].map(k => [k, counts[k]]);
+    ...CANAL_ORDER.map(k => [k, counts[k] || 0]),
+    ...Object.keys(counts).filter(k => !CANAL_ORDER.includes(k)).map(k => [k, counts[k]])
+  ].filter(([k,v]) => v > 0 || ALWAYS_SHOW.has(k));
 
   const labels = entries.map(([k]) => k);
   const data   = entries.map(([,v]) => v);
@@ -1212,6 +1222,7 @@ function renderOBIBChart(reus) {
                 const pct=total?Math.round(val/total*100):0;
                 return {
                   text:`${lbl}  ${val} (${pct}%)`,
+                  fontColor:'#F9FAFB',
                   fillStyle:ch.data.datasets[0].borderColor[i],
                   strokeStyle:ch.data.datasets[0].borderColor[i],
                   lineWidth:1.5, index:i
@@ -1263,6 +1274,44 @@ function renderReuSdrChart(reus) {
   });
 }
 
+function renderBDEVChart(reus) {
+  if (bdevChartInst) { bdevChartInst.destroy(); bdevChartInst = null; }
+  const canvas = document.getElementById('bdev-pais-chart');
+  if (!canvas) return;
+  const bdevReus = reus.filter(r => r.canal === 'BDEV');
+  if (!bdevReus.length) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--muted);font-size:12px;">Sin reuniones BDEV para este filtro</p>';
+    return;
+  }
+  const paises = [
+    { label:'🇲🇽 México', key:'MEXICO',  color:'#34D399' },
+    { label:'🇵🇪 Perú',   key:'PERU',    color:'#60A5FA' },
+    { label:'🇪🇸 España', key:'ESPANA',  color:'#F87171' },
+  ];
+  const data   = paises.map(p => bdevReus.filter(r => r.pais === p.key).length);
+  const colors = paises.map(p => p.color);
+  bdevChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: paises.map(p => p.label),
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + '55'),
+        borderColor: colors,
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: { ...CHART_DEFAULTS,
+      scales: {
+        x: { ticks:{ font:{size:11}, color:'#F9FAFB' }, grid:{ display:false } },
+        y: { beginAtZero:true, ticks:{ font:{size:10}, color:'#6B7280', stepSize:1 }, grid:{ color:'rgba(255,255,255,0.04)' } },
+      },
+    }
+  });
+}
+
 function renderFunnel(contactados, respuestas, reuniones, realizadas, cotizaciones, won) {
   const steps = [
     { label:'Contactados', val:contactados, color:'#60A5FA' },
@@ -1276,12 +1325,12 @@ function renderFunnel(contactados, respuestas, reuniones, realizadas, cotizacion
     const pct = Math.round(s.val/max*100);
     const convPct = i > 0 && steps[i-1].val ? Math.round(s.val/steps[i-1].val*100) : null;
     return `<div class="funnel-row">
-      <div class="funnel-label">${s.label}</div>
+      <div class="funnel-label" style="color:#F9FAFB;">${s.label}</div>
       <div class="funnel-bar-wrap">
         <div class="funnel-bar" style="width:${Math.max(pct,s.val>0?3:0)}%;background:${s.color}55;border-left:3px solid ${s.color};"></div>
         <span class="funnel-val">${s.val.toLocaleString()}</span>
       </div>
-      <div class="funnel-pct">${convPct!==null?convPct+'%':''}</div>
+      <div class="funnel-pct" style="color:#F9FAFB;">${convPct!==null?convPct+'%':''}</div>
     </div>`;
   }).join('');
 }
