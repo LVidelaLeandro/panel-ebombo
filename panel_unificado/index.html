@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v7',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v8',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -295,6 +295,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     </div>
   </div>
 
+  <!-- ── BDEV ── -->
+  <div class="stitle" style="margin-bottom:.75rem;margin-top:1.5rem;">BDEV</div>
+  <div class="kpi-grid" id="d-bdev-cards"></div>
 </section>
 
 <!-- ═══════ MI PANEL (SDR individual editable) ═══════ -->
@@ -1021,6 +1024,37 @@ function renderDash() {
   renderReuSdrChart(reus);
   renderOBIBChart(reus);
   renderFunnel(t.contactados, t.respuestas, reus.length, realizadas, conCot, won);
+
+  // Panel BDEV
+  const bdevReus = reus.filter(r => r.canal === 'BDEV');
+  const bdevReal = bdevReus.filter(r => r.realizada === 'SI').length;
+  const bdevWon  = bdevReus.filter(r => r.estado === 'WON').length;
+  const bdevPip  = bdevReus.reduce((s,r) => s+(r.monto||0), 0);
+  const bdevBySdr = ['Leandro','Grace','Carmen','Luziana']
+    .map(s => ({ sdr:s, total:bdevReus.filter(r=>r.sdr===s).length, real:bdevReus.filter(r=>r.sdr===s&&r.realizada==='SI').length }))
+    .filter(x => x.total > 0);
+  document.getElementById('d-bdev-cards').innerHTML = bdevReus.length ? `
+    <div class="card" style="border-color:#FB923C44;">
+      <div class="card-lbl" style="color:#FB923C;">Reuniones BDEV</div>
+      <div class="card-val" style="color:#FB923C;">${bdevReus.length}</div>
+      <div class="card-sub">${bdevReal} realizadas</div>
+    </div>
+    <div class="card" style="border-color:#FB923C44;">
+      <div class="card-lbl" style="color:var(--muted);">Show rate</div>
+      <div class="card-val" style="color:#FB923C;">${Math.round(bdevReal/(bdevReus.length||1)*100)}%</div>
+      <div class="card-sub">de reuniones BDEV</div>
+    </div>
+    <div class="card g" style="border-color:#FB923C44;">
+      <div class="card-lbl">WON</div>
+      <div class="card-val">${bdevWon}</div>
+      <div class="card-sub">${bdevPip > 0 ? '$'+bdevPip.toLocaleString() : '—'}</div>
+    </div>
+    ${bdevBySdr.map(x=>`<div class="card" style="border-color:#FB923C33;">
+      <div class="card-lbl" style="color:#FB923C;">${x.sdr}</div>
+      <div class="card-val">${x.total}</div>
+      <div class="card-sub">${x.real} realizadas</div>
+    </div>`).join('')}
+  ` : '<p style="color:var(--muted);font-size:12px;padding:.5rem 0;">Sin reuniones BDEV para este filtro</p>';
 }
 
 function renderSdrCanalChart(recs) {
@@ -1073,9 +1107,13 @@ function renderSdrCanalChart(recs) {
 }
 
 function renderCanalChart(reus) {
-  const CANAL_ORDER = ['REPLY','PROSPECCION','INBOUND','BDEV','LinkedIn','Correo','Llamadas','Llamada','WhatsApp','Otros'];
+  const CANAL_ORDER = ['REPLY','PROSPECCION','INBOUND','LinkedIn','Correo','Llamadas','WhatsApp','Otros'];
   const counts = {};
-  reus.forEach(r => { if (r.canal) counts[r.canal] = (counts[r.canal]||0)+1; });
+  reus.forEach(r => {
+    if (!r.canal || r.canal === 'BDEV') return;
+    const c = r.canal === 'Llamada' ? 'Llamadas' : r.canal;
+    counts[c] = (counts[c]||0)+1;
+  });
   const total = Object.values(counts).reduce((s,v)=>s+v, 0);
   if (canalChartInst) { canalChartInst.destroy(); canalChartInst = null; }
   const canvas = document.getElementById('canal-chart');
