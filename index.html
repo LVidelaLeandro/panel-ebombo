@@ -1149,6 +1149,19 @@ function renderDash() {
   ` : '<p style="color:var(--muted);font-size:12px;padding:.5rem 0;">Sin reuniones BDEV para este filtro</p>';
 }
 
+function chartEmpty(canvas, msg) {
+  canvas.style.display = 'none';
+  let el = canvas.parentElement.querySelector('.chart-empty');
+  if (!el) { el = document.createElement('p'); el.className = 'chart-empty'; el.style.cssText = 'text-align:center;padding:3rem;color:var(--muted);font-size:12px;margin:0;'; canvas.parentElement.appendChild(el); }
+  el.textContent = msg;
+  el.style.display = '';
+}
+function chartReady(canvas) {
+  canvas.style.display = '';
+  const el = canvas.parentElement.querySelector('.chart-empty');
+  if (el) el.style.display = 'none';
+}
+
 function renderSdrCanalChart(recs) {
   const CANAL_COLORS = {
     'Email':    { bg:'#60A5FA44', border:'#60A5FA' },
@@ -1169,10 +1182,10 @@ function renderSdrCanalChart(recs) {
   const canvas = document.getElementById('sdr-canal-chart');
   if (sdrCanalChartInst) { sdrCanalChartInst.destroy(); sdrCanalChartInst = null; }
   if (!SDRS_LIST.length || !recs.length) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin datos</p>';
+    chartEmpty(canvas, 'Sin datos'); return;
     return;
   }
-  sdrCanalChartInst = new Chart(canvas, {
+  chartReady(canvas); sdrCanalChartInst = new Chart(canvas, {
     type: 'bar',
     data: {
       labels: SDRS_LIST,
@@ -1209,11 +1222,11 @@ function renderReplyChart(reus) {
   const data = labels.map(s => counts[s]);
   const total = data.reduce((s,v)=>s+v,0);
   if (!total) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones REPLY</p>';
+    chartEmpty(canvas, 'Sin reuniones REPLY'); return;
     return;
   }
   const colors = labels.map(l => SDR_COLORS[l] || '#9CA3AF');
-  replyChartInst = new Chart(canvas, {
+  chartReady(canvas); replyChartInst = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: colors.map(c=>c+'55'), borderColor: colors, borderWidth:2, borderRadius:4, borderSkipped:false }] },
     options: { ...CHART_DEFAULTS, indexAxis:'y',
@@ -1251,13 +1264,13 @@ function renderProspChart(reus) {
   });
   const total = Object.values(counts).reduce((s,v)=>s+v,0);
   if (!total) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones Prospección</p>';
+    chartEmpty(canvas, 'Sin reuniones Prospección'); return;
     return;
   }
   const labels = PROSP_LABELS.filter(k => counts[k]>0);
   const data   = labels.map(k => counts[k]);
   const colors = labels.map(l => PROSP_COLORS[l]);
-  prospChartInst = new Chart(canvas, {
+  chartReady(canvas); prospChartInst = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data, backgroundColor: colors.map(c=>c+'55'), borderColor: colors, borderWidth:2, borderRadius:4, borderSkipped:false }] },
     options: { ...CHART_DEFAULTS, indexAxis:'y',
@@ -1283,7 +1296,7 @@ function renderOBIBChart(reus) {
   const inbound  = reus.filter(r=>r.canal==='INBOUND').length;
   const total    = outbound + inbound;
   if (!total) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
+    chartEmpty(canvas, 'Sin reuniones para este filtro'); return;
     return;
   }
   const centerPlugin = {
@@ -1301,7 +1314,7 @@ function renderOBIBChart(reus) {
       ctx.restore();
     }
   };
-  obibChartInst = new Chart(canvas, {
+  chartReady(canvas); obibChartInst = new Chart(canvas, {
     type:'doughnut',
     plugins:[centerPlugin],
     data:{
@@ -1345,13 +1358,13 @@ function renderReuSdrChart(reus) {
   const canvas = document.getElementById('reu-sdr-chart');
   const sdrNames = ['Leandro','Grace','Carmen','Luziana'].filter(s=>reus.some(r=>r.sdr===s));
   if (!reus.length || !sdrNames.length) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
+    chartEmpty(canvas, 'Sin reuniones para este filtro'); return;
     return;
   }
   const realizadas = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada==='SI').length);
   const todavia    = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada==='TODAVIA').length);
   const pendiente  = sdrNames.map(s=>reus.filter(r=>r.sdr===s&&r.realizada!=='SI'&&r.realizada!=='TODAVIA').length);
-  reuSdrChartInst = new Chart(canvas, {
+  chartReady(canvas); reuSdrChartInst = new Chart(canvas, {
     type: 'bar',
     data: {
       labels: sdrNames,
@@ -1380,7 +1393,7 @@ function renderBDEVChart(reus) {
   if (!canvas) return;
   const bdevReus = reus.filter(r => r.canal === 'BDEV');
   if (!bdevReus.length) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--muted);font-size:12px;">Sin reuniones BDEV para este filtro</p>';
+    chartEmpty(canvas, 'Sin reuniones BDEV para este filtro'); return;
     return;
   }
   const paises = [
@@ -1390,7 +1403,7 @@ function renderBDEVChart(reus) {
   ];
   const data   = paises.map(p => bdevReus.filter(r => r.pais === p.key).length);
   const colors = paises.map(p => p.color);
-  bdevChartInst = new Chart(canvas, {
+  chartReady(canvas); bdevChartInst = new Chart(canvas, {
     type: 'bar',
     data: {
       labels: paises.map(p => p.label),
