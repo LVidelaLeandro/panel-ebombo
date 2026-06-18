@@ -348,6 +348,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div id="reu-form" style="display:none;" class="fcard">
     <div class="stitle" style="margin-top:0;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--text);">Nueva reunión</div>
     <div class="fgrid" style="margin-top:1rem;">
+      <div class="fg"><label>Mes</label><select id="nr-mes">
+        <option value="1">Mes 1</option><option value="2">Mes 2</option><option value="3">Mes 3</option>
+        <option value="4">Mes 4</option><option value="5">Mes 5</option><option value="6">Mes 6</option>
+        <option value="7">Mes 7</option><option value="8">Mes 8</option><option value="9">Mes 9</option>
+        <option value="10">Mes 10</option><option value="11">Mes 11</option><option value="12">Mes 12</option>
+      </select></div>
+      <div class="fg"><label>Semana</label><select id="nr-semana">
+        <option value="1">Sem 1</option><option value="2">Sem 2</option><option value="3">Sem 3</option>
+        <option value="4">Sem 4</option><option value="5">Sem 5</option>
+      </select></div>
       <div class="fg"><label>SDR</label><select id="nr-sdr"><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select></div>
       <div class="fg"><label>Empresa</label><input type="text" id="nr-empresa" placeholder="Nombre de la empresa"></div>
       <div class="fg"><label>País</label><select id="nr-pais"><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select></div>
@@ -363,7 +373,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <option value="Otros">Otros</option>
       </select></div>
       <div class="fg"><label>¿Se realizó?</label><select id="nr-realizada"><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select></div>
-      <div class="fg"><label>¿Salió cotización?</label><select id="nr-cot"><option value="SI">Sí</option><option value="NO">No</option></select></div>
+      <div class="fg"><label>¿Salió cotización?</label><select id="nr-cot"><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select></div>
       <div class="fg"><label>Estado</label><select id="nr-estado"><option value="">En proceso</option><option value="HOT">HOT</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="PENDIENTE">Pendiente</option></select></div>
       <div class="fg"><label>Monto USD</label><div class="numrow"><button onclick="dec('nr-monto')">−</button><input type="number" id="nr-monto" value="0" min="0"><button onclick="inc('nr-monto')">+</button></div></div>
     </div>
@@ -1676,7 +1686,14 @@ function renderReus() {
           style="background:none;border:none;cursor:pointer;color:#EF4444;font-size:16px;padding:2px 4px;line-height:1;border-radius:4px;"
           onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='none'">🗑</button>
       </td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">M${r.mes}S${r.semana}</td>
+      <td style="white-space:nowrap;">
+        <select onchange="editReuAt(${i},'mes',this.value)" style="${selStyle}font-family:'DM Mono',monospace;">
+          ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${r.mes===m?'selected':''}>M${m}</option>`).join('')}
+        </select>
+        <select onchange="editReuAt(${i},'semana',this.value)" style="${selStyle}font-family:'DM Mono',monospace;margin-left:2px;">
+          ${[1,2,3,4,5].map(s=>`<option value="${s}" ${r.semana===s?'selected':''}>S${s}</option>`).join('')}
+        </select>
+      </td>
       <td><strong>${r.sdr}</strong></td>
       <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${emp}">${emp}</td>
       <td>
@@ -1709,8 +1726,9 @@ function renderReus() {
       </td>
       <td>
         <select onchange="editReuAt(${i},'cotizacion',this.value)" style="${selStyle}">
-          <option value="SI" ${r.cotizacion==='SI'?'selected':''}>Sí</option>
-          <option value="NO" ${r.cotizacion==='NO'?'selected':''}>No</option>
+          <option value="SI"      ${r.cotizacion==='SI'     ?'selected':''}>Sí</option>
+          <option value="NO"      ${r.cotizacion==='NO'     ?'selected':''}>No</option>
+          <option value="TODAVIA" ${r.cotizacion==='TODAVIA'?'selected':''}>Todavía</option>
         </select>
       </td>
       <td>
@@ -2369,14 +2387,21 @@ function getAllReus() {
 
 function showAddReu() {
   const f = document.getElementById('reu-form');
-  f.style.display = f.style.display==='none'?'block':'none';
+  if (f.style.display==='none') {
+    const now = new Date();
+    document.getElementById('nr-mes').value = now.getMonth()+1;
+    document.getElementById('nr-semana').value = Math.min(Math.ceil(now.getDate()/7),5);
+    f.style.display='block';
+  } else {
+    f.style.display='none';
+  }
 }
 
 function addReu() {
   const now = new Date();
   const r = {
-    mes:       now.getMonth()+1,
-    semana:    Math.ceil(now.getDate()/7),
+    mes:       parseInt(document.getElementById('nr-mes').value),
+    semana:    parseInt(document.getElementById('nr-semana').value),
     sdr:       document.getElementById('nr-sdr').value,
     empresa:   document.getElementById('nr-empresa').value,
     realizada: document.getElementById('nr-realizada').value,
@@ -2398,7 +2423,9 @@ function addReu() {
 }
 
 function editReu(key, field, val) {
-  const v = field === 'monto' ? (parseInt((val||'').replace(/[^0-9]/g,''))||0) : val;
+  const v = field === 'monto' ? (parseInt((val||'').replace(/[^0-9]/g,''))||0)
+          : (field === 'mes' || field === 'semana') ? parseInt(val)
+          : val;
   // Primero intenta en reusExtras (tiene _id)
   const extra = reusExtras.find(x => x._id === key);
   if (extra) {
