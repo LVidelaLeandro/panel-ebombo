@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v20',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v21',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -2167,7 +2167,7 @@ tr:last-child td{border-bottom:none;}
 .chart-box-full{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;margin-top:1.2rem;}
 .chart-box-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:.75rem;}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+\x3cscript src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js">\x3c/script>
 </head><body>
 <div class="wrapper">
 
@@ -2453,33 +2453,28 @@ ${period==='month'&&semanasData.length?`<div class="section">
 </div>
 
 </div>
-<script>
+\x3cscript>
 (function(){
   var SDR_COLORS={Leandro:'#3a3596',Grace:'#22a86e',Carmen:'#FB923C',Luziana:'#F472B6'};
   var CANAL_COLORS={Correo:'#60A5FA',LinkedIn:'#0A66C2',Llamada:'#34D399',WhatsApp:'#25D366',Otro:'#9CA3AF'};
   var barOpts=function(axis){return{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{[axis]:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},[(axis==='x'?'y':'x')]:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}};};
 
-  // 1. Doughnut — Estado de reuniones
   var donutEl=document.getElementById('rpt-donut');
   if(donutEl){var d=${rptDonut};new Chart(donutEl,{type:'doughnut',data:{labels:['Realizadas','Todavía','No realizadas'],datasets:[{data:d,backgroundColor:['#22a86e','#e6a817','#EF4444'],borderWidth:2,borderColor:'#f8f7ff',hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:true,cutout:'62%',plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},padding:14,color:'#374151'}}}}});}
 
-  // 2. SDR bar — Reuniones por SDR
   var sdrEl=document.getElementById('rpt-sdr-bar');
   if(sdrEl){var sd=${rptSdrBar};if(sd.length){new Chart(sdrEl,{type:'bar',data:{labels:sd.map(function(x){return x.sdr;}),datasets:[{label:'Agendadas',data:sd.map(function(x){return x.n;}),backgroundColor:sd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'33';}),borderColor:sd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5},{label:'Realizadas',data:sd.map(function(x){return x.real;}),backgroundColor:sd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'88';}),borderColor:sd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',plugins:{legend:{display:true,position:'top',labels:{font:{size:10},padding:10}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},y:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}});}}
 
-  // 3. REPLY por SDR
   var replyEl=document.getElementById('rpt-reply-bar');
   if(replyEl){var rd=${rptReplyBar};if(rd.length){new Chart(replyEl,{type:'bar',data:{labels:rd.map(function(x){return x.sdr;}),datasets:[{data:rd.map(function(x){return x.n;}),backgroundColor:rd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'55';}),borderColor:rd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:barOpts('x')});}}
 
-  // 4. Prospección por canal
   var prospEl=document.getElementById('rpt-prosp-bar');
   if(prospEl){var pd=${rptProspBar};if(pd.length){new Chart(prospEl,{type:'bar',data:{labels:pd.map(function(x){return x.k;}),datasets:[{data:pd.map(function(x){return x.n;}),backgroundColor:pd.map(function(x){return (CANAL_COLORS[x.k]||'#9CA3AF')+'55';}),borderColor:pd.map(function(x){return CANAL_COLORS[x.k]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:barOpts('x')});}}
 
-  // 5. Evolución semanal — line chart
   var semEl=document.getElementById('rpt-sem-line');
   if(semEl){var sm=${rptSemLine};if(sm.length){new Chart(semEl,{type:'line',data:{labels:sm.map(function(s){return 'Sem '+s.sem;}),datasets:[{label:'Agendadas',data:sm.map(function(s){return s.total;}),borderColor:'#3a3596',backgroundColor:'#3a359622',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#3a3596',pointBorderColor:'#fff',pointBorderWidth:2},{label:'Realizadas',data:sm.map(function(s){return s.real;}),borderColor:'#22a86e',backgroundColor:'#22a86e22',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#22a86e',pointBorderColor:'#fff',pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:true,position:'top',labels:{font:{size:11},padding:12,color:'#374151'}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'},grid:{color:'#f0eff8'}},x:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}});}}
 })();
-</script>
+\x3c/script>
 </body></html>`;
 
   // Siempre descargar
