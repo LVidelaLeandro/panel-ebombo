@@ -257,10 +257,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   <div class="stitle" style="margin-bottom:.75rem;">Reuniones</div>
   <div class="kpi-grid" id="d-cards"></div>
 
-  <div class="dash-grid">
+  <div class="dash-grid" style="grid-template-columns:1fr 1fr 1fr;">
     <div class="chart-wrap">
-      <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>Origen de reuniones — por canal</div>
-      <div class="chart-inner" style="height:220px;"><canvas id="canal-chart"></canvas></div>
+      <div class="chart-title"><span class="cdot" style="background:#60A5FA;"></span>REPLY — por SDR</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="reply-chart"></canvas></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="cdot" style="background:#34D399;"></span>Prospección — por canal</div>
+      <div class="chart-inner" style="height:220px;"><canvas id="prosp-chart"></canvas></div>
     </div>
     <div class="chart-wrap">
       <div class="chart-title"><span class="cdot" style="background:#34D399;"></span>Outbound vs Inbound</div>
@@ -492,7 +496,8 @@ let miSdr = 'leandro';
 let miPeriod = '2026-06';
 let miData = {};   // {leandro_2026-06: {out:{...}, ib:{...}}}
 let chartInst = null;
-let canalChartInst = null;
+let replyChartInst = null;
+let prospChartInst = null;
 let sdrCanalChartInst = null;
 let reuSdrChartInst = null;
 let obibChartInst = null;
@@ -1088,7 +1093,8 @@ function renderDash() {
   }).filter(Boolean).join('');
   document.getElementById('d-pais-tbl').innerHTML = paisRows||'<tr class="empty-row"><td colspan="6">Sin datos</td></tr>';
 
-  renderCanalChart(reus);
+  renderReplyChart(reus);
+  renderProspChart(reus);
   renderReuSdrChart(reus);
   renderOBIBChart(reus);
   renderFunnel(reus.length, realizadas, conCot, won, lost);
@@ -1175,54 +1181,67 @@ function renderSdrCanalChart(recs) {
   });
 }
 
-function renderCanalChart(reus) {
-  const CANAL_ORDER = ['REPLY','PROSPECCION','INBOUND','LinkedIn','Correo','Llamadas','WhatsApp','Otros'];
+function renderReplyChart(reus) {
+  if (replyChartInst) { replyChartInst.destroy(); replyChartInst = null; }
+  const canvas = document.getElementById('reply-chart');
+  if (!canvas) return;
+  const SDR_COLORS = { Leandro:'#60A5FA', Grace:'#34D399', Carmen:'#F472B6', Luziana:'#FB923C' };
   const counts = {};
-  reus.forEach(r => {
-    if (!r.canal || r.canal === 'BDEV') return;
-    const c = r.canal === 'Llamada' ? 'Llamadas' : r.canal;
-    counts[c] = (counts[c]||0)+1;
-  });
-  const total = Object.values(counts).reduce((s,v)=>s+v, 0);
-  if (canalChartInst) { canalChartInst.destroy(); canalChartInst = null; }
-  const canvas = document.getElementById('canal-chart');
+  reus.filter(r => r.canal === 'REPLY').forEach(r => { if(r.sdr) counts[r.sdr]=(counts[r.sdr]||0)+1; });
+  const labels = Object.keys(SDR_COLORS).filter(s => counts[s]);
+  const data = labels.map(s => counts[s]);
+  const total = data.reduce((s,v)=>s+v,0);
   if (!total) {
-    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones para este filtro</p>';
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones REPLY</p>';
     return;
   }
-  const ALWAYS_SHOW = new Set(['Llamadas','LinkedIn']);
-  const entries = [
-    ...CANAL_ORDER.map(k => [k, counts[k] || 0]),
-    ...Object.keys(counts).filter(k => !CANAL_ORDER.includes(k)).map(k => [k, counts[k]])
-  ].filter(([k,v]) => v > 0 || ALWAYS_SHOW.has(k));
-
-  const labels = entries.map(([k]) => k);
-  const data   = entries.map(([,v]) => v);
-  const colors = labels.map(l => CANAL_COLORS[l] || '#9CA3AF');
-
-  canalChartInst = new Chart(canvas, {
+  const colors = labels.map(l => SDR_COLORS[l] || '#9CA3AF');
+  replyChartInst = new Chart(canvas, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        backgroundColor: colors.map(c => c + '55'),
-        borderColor: colors,
-        borderWidth: 2,
-        borderRadius: 4,
-        borderSkipped: false,
-      }]
-    },
-    options: { ...CHART_DEFAULTS,
-      indexAxis: 'y',
+    data: { labels, datasets: [{ data, backgroundColor: colors.map(c=>c+'55'), borderColor: colors, borderWidth:2, borderRadius:4, borderSkipped:false }] },
+    options: { ...CHART_DEFAULTS, indexAxis:'y',
       scales: {
-        x: { beginAtZero:true, ticks:{ font:{size:10}, color:'#6B7280', stepSize:1 }, grid:{ color:'rgba(255,255,255,0.04)' } },
-        y: { ticks:{ font:{size:12}, color:'#F9FAFB' }, grid:{ display:false } },
+        x: { beginAtZero:true, ticks:{font:{size:10},color:'#6B7280',stepSize:1}, grid:{color:'rgba(255,255,255,0.04)'} },
+        y: { ticks:{font:{size:12},color:'#F9FAFB'}, grid:{display:false} },
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)` } }
-      }
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)`}} }
+    }
+  });
+}
+
+function renderProspChart(reus) {
+  if (prospChartInst) { prospChartInst.destroy(); prospChartInst = null; }
+  const canvas = document.getElementById('prosp-chart');
+  if (!canvas) return;
+  const PROSP_LABELS = ['Correo','LinkedIn','Llamada','WhatsApp','Otro'];
+  const PROSP_COLORS = { Correo:'#60A5FA', LinkedIn:'#0A66C2', Llamada:'#34D399', WhatsApp:'#25D366', Otro:'#9CA3AF' };
+  const counts = { Correo:0, LinkedIn:0, Llamada:0, WhatsApp:0, Otro:0 };
+  reus.forEach(r => {
+    const c = r.canal;
+    if (!c || c==='REPLY' || c==='INBOUND' || c==='BDEV') return;
+    if (c==='Correo')                       counts.Correo++;
+    else if (c==='LinkedIn')                counts.LinkedIn++;
+    else if (c==='Llamadas'||c==='Llamada') counts.Llamada++;
+    else if (c==='WhatsApp')                counts.WhatsApp++;
+    else                                    counts.Otro++;
+  });
+  const total = Object.values(counts).reduce((s,v)=>s+v,0);
+  if (!total) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;padding:3rem;color:var(--muted);font-size:12px;">Sin reuniones Prospección</p>';
+    return;
+  }
+  const labels = PROSP_LABELS.filter(k => counts[k]>0);
+  const data = labels.map(k => counts[k]);
+  const colors = labels.map(l => PROSP_COLORS[l]);
+  prospChartInst = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors.map(c=>c+'55'), borderColor: colors, borderWidth:2, borderRadius:4, borderSkipped:false }] },
+    options: { ...CHART_DEFAULTS, indexAxis:'y',
+      scales: {
+        x: { beginAtZero:true, ticks:{font:{size:10},color:'#6B7280',stepSize:1}, grid:{color:'rgba(255,255,255,0.04)'} },
+        y: { ticks:{font:{size:12},color:'#F9FAFB'}, grid:{display:false} },
+      },
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)`}} }
     }
   });
 }
