@@ -14,6 +14,7 @@ function doGet(e) {
     if      (action === 'get')          result = getRegistros();
     else if (action === 'getMi')        result = getMiPanel(e.parameter.sdr, e.parameter.period);
     else if (action === 'getCampDaily') result = getCampDaily(e.parameter.year, e.parameter.month);
+    else if (action === 'getReus')      result = getReuRegistros();
     else if (action === 'status')       result = { ok: true };
     else result = { ok: false, error: 'Acción no reconocida' };
   } catch(err) {
@@ -216,6 +217,23 @@ function addCampRegistro(camp) {
 }
 
 // ─── REUNIONES EXTRA ──────────────────────────────────
+function getReuRegistros() {
+  const sheet = getSheet('Reuniones Extra',
+    ['_id','mes','semana','sdr','empresa','realizada','pais','canal','cotizacion','estado','monto','updated']);
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { ok: true, reus: [] };
+  const headers = ['_id','mes','semana','sdr','empresa','realizada','pais','canal','cotizacion','estado','monto'];
+  const reus = data.slice(1).map(function(row) {
+    var r = {};
+    headers.forEach(function(h, i) { r[h] = row[i]; });
+    r.mes    = Number(r.mes)    || 0;
+    r.semana = Number(r.semana) || 0;
+    r.monto  = Number(r.monto)  || 0;
+    return r;
+  }).filter(function(r) { return r._id; });
+  return { ok: true, reus: reus };
+}
+
 function addReuRegistro(reu) {
   const sheet = getSheet('Reuniones Extra',
     ['_id','mes','semana','sdr','empresa','realizada','pais','canal','cotizacion','estado','monto','updated']);

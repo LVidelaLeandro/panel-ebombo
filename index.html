@@ -894,6 +894,7 @@ async function init() {
   populateDashPeriod();
   await loadData();
   loadCampDailyFromSheets();
+  loadReusFromSheets();
   renderReus();
   renderRanking();
 }
@@ -2355,6 +2356,10 @@ function go(t) {
 let reusExtras = [];
 try { reusExtras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]'); } catch(e) {}
 
+// IDs eliminados localmente (para no re-agregar desde Sheets)
+let reusDeleted = new Set();
+try { reusDeleted = new Set(JSON.parse(localStorage.getItem('ebombo_reus_deleted')||'[]')); } catch(e) {}
+
 // Overrides para entradas de REUNIONES_DATA (clave = mes__semana__sdr__empresa)
 let reuEdits = {};
 try { reuEdits = JSON.parse(localStorage.getItem('ebombo_reus_edits')||'{}'); } catch(e) {}
@@ -2456,6 +2461,8 @@ function deleteReu(key) {
   if (idx !== -1) {
     reusExtras.splice(idx, 1);
     localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+    reusDeleted.add(key);
+    localStorage.setItem('ebombo_reus_deleted', JSON.stringify([...reusDeleted]));
   } else {
     if (!reuEdits[key]) reuEdits[key] = {};
     reuEdits[key]._deleted = true;
@@ -2475,6 +2482,31 @@ function saveDailyData(y, m, data) {
   saveDailyDataLocal(y, m, data);
   apiPost({ action: 'saveCampDaily', year: y, month: m, data: data });
 }
+function loadReusFromSheets() {
+  apiFetch('getReus').then(data => {
+    if (!data || !Array.isArray(data.reus)) return;
+    const existingIds = new Set(reusExtras.map(r => r._id));
+    let changed = false;
+    data.reus.forEach(r => {
+      if (!r._id || reusDeleted.has(r._id)) return;
+      if (!existingIds.has(r._id)) {
+        reusExtras.push(r);
+        changed = true;
+      } else {
+        const idx = reusExtras.findIndex(x => x._id === r._id);
+        if (idx !== -1 && JSON.stringify(reusExtras[idx]) !== JSON.stringify(r)) {
+          Object.assign(reusExtras[idx], r);
+          changed = true;
+        }
+      }
+    });
+    if (changed) {
+      localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+      renderReus();
+    }
+  });
+}
+
 function loadCampDailyFromSheets() {
   const now = new Date();
   const y = now.getFullYear();
