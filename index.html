@@ -343,6 +343,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <label>Realizada</label><select id="re-realizada" onchange="renderReus()"><option value="all">Todas</option><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select>
     </div>
     <button class="btn-primary" onclick="showAddReu()" style="font-size:12px;padding:8px 16px;">+ Nueva reunión</button>
+    <button onclick="syncReusManual()" id="sync-reus-btn" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">↻ Sincronizar</button>
+    <span id="sync-reus-status" style="font-size:11px;color:var(--muted);"></span>
   </div>
   <!-- Form nueva reunión -->
   <div id="reu-form" style="display:none;" class="fcard">
@@ -2482,27 +2484,47 @@ function saveDailyData(y, m, data) {
   saveDailyDataLocal(y, m, data);
   apiPost({ action: 'saveCampDaily', year: y, month: m, data: data });
 }
-function loadReusFromSheets() {
+function loadReusFromSheets(onDone) {
   apiFetch('getReus').then(data => {
-    if (!data || !Array.isArray(data.reus)) return;
+    if (!data || !Array.isArray(data.reus)) {
+      if (onDone) onDone(null, 'Sin respuesta del servidor');
+      return;
+    }
     const existingIds = new Set(reusExtras.map(r => r._id));
-    let changed = false;
+    let added = 0;
     data.reus.forEach(r => {
       if (!r._id || reusDeleted.has(r._id)) return;
       if (!existingIds.has(r._id)) {
         reusExtras.push(r);
-        changed = true;
+        added++;
       } else {
         const idx = reusExtras.findIndex(x => x._id === r._id);
-        if (idx !== -1 && JSON.stringify(reusExtras[idx]) !== JSON.stringify(r)) {
-          Object.assign(reusExtras[idx], r);
-          changed = true;
-        }
+        if (idx !== -1) Object.assign(reusExtras[idx], r);
       }
     });
-    if (changed) {
+    if (added > 0) {
       localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
       renderReus();
+    }
+    if (onDone) onDone(data.reus.length, null);
+  });
+}
+
+function syncReusManual() {
+  const btn = document.getElementById('sync-reus-btn');
+  const status = document.getElementById('sync-reus-status');
+  btn.disabled = true;
+  btn.textContent = '↻ Sincronizando...';
+  status.textContent = '';
+  loadReusFromSheets((total, err) => {
+    btn.disabled = false;
+    btn.textContent = '↻ Sincronizar';
+    if (err) {
+      status.style.color = '#EF4444';
+      status.textContent = '✗ ' + err;
+    } else {
+      status.style.color = '#22a86e';
+      status.textContent = `✓ ${total} reuniones desde Sheets`;
     }
   });
 }
