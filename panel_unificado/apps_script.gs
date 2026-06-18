@@ -15,6 +15,8 @@ function doGet(e) {
     else if (action === 'getMi')        result = getMiPanel(e.parameter.sdr, e.parameter.period);
     else if (action === 'getCampDaily') result = getCampDaily(e.parameter.year, e.parameter.month);
     else if (action === 'getReus')      result = getReuRegistros();
+    else if (action === 'getCamps')     result = getCampsRegistros();
+    else if (action === 'getReuEdits')  result = getReuEdits();
     else if (action === 'status')       result = { ok: true };
     else result = { ok: false, error: 'Acción no reconocida' };
   } catch(err) {
@@ -35,11 +37,12 @@ function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
     let result;
-    if      (body.action === 'add')       result = addRegistro(body.record);
-    else if (body.action === 'saveMi')    result = saveMiPanel(body.sdr, body.period, body.out, body.ib);
-    else if (body.action === 'addCamp')   result = addCampRegistro(body.camp);
-    else if (body.action === 'addReu')    result = addReuRegistro(body.reu);
-    else if (body.action === 'sendEmail')    result = sendReporteEmail(body.recipients, body.subject, body.htmlBody);
+    if      (body.action === 'add')           result = addRegistro(body.record);
+    else if (body.action === 'saveMi')        result = saveMiPanel(body.sdr, body.period, body.out, body.ib);
+    else if (body.action === 'addCamp')       result = addCampRegistro(body.camp);
+    else if (body.action === 'addReu')        result = addReuRegistro(body.reu);
+    else if (body.action === 'saveReuEdit')   result = saveReuEdit(body.key, body.data);
+    else if (body.action === 'sendEmail')     result = sendReporteEmail(body.recipients, body.subject, body.htmlBody);
     else if (body.action === 'saveCampDaily') result = saveCampDaily(body.year, body.month, body.data);
     else result = { ok: false, error: 'Acción no reconocida' };
     return ContentService
@@ -256,4 +259,42 @@ function addReuRegistro(reu) {
     reu.cotizacion||'', reu.estado||'', reu.monto||0, ts
   ]);
   return { ok: true };
+}
+
+// ─── CAMPAÑAS EXTRA ───────────────────────────────────
+function getCampsRegistros() {
+  const sheet = getSheet('Campañas',
+    ['id','sdr','pais','fecha','nombre','contactos','respuestas','reuniones','updated']);
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { ok: true, camps: [] };
+  const camps = data.slice(1).map(function(row) {
+    return { id: String(row[0]), sdr: row[1]||'', pais: row[2]||'', nombre: row[4]||'' };
+  }).filter(function(c) { return c.id && c.id.indexOf('custom_') === 0; });
+  return { ok: true, camps: camps };
+}
+
+// ─── EDITS DE REUNIONES HARDCODEADAS ─────────────────
+function saveReuEdit(key, data) {
+  const sheet = getSheet('Reus Edits', ['key','data','updated']);
+  const rows = sheet.getDataRange().getValues();
+  const ts = new Date().toLocaleString('es-ES');
+  const json = JSON.stringify(data);
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === key) {
+      sheet.getRange(i+1, 2, 1, 2).setValues([[json, ts]]);
+      return { ok: true };
+    }
+  }
+  sheet.appendRow([key, json, ts]);
+  return { ok: true };
+}
+
+function getReuEdits() {
+  const sheet = getSheet('Reus Edits', ['key','data','updated']);
+  const rows = sheet.getDataRange().getValues();
+  var edits = {};
+  for (var i = 1; i < rows.length; i++) {
+    try { edits[rows[i][0]] = JSON.parse(rows[i][1]); } catch(e) {}
+  }
+  return { ok: true, edits: edits };
 }

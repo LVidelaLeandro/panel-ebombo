@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v17',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v18',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -897,6 +897,8 @@ async function init() {
   await loadData();
   loadCampDailyFromSheets();
   loadReusFromSheets();
+  loadCampsFromSheets();
+  loadReuEditsFromSheets();
   renderReus();
   renderRanking();
 }
@@ -2444,6 +2446,7 @@ function editReu(key, field, val) {
     if (!reuEdits[key]) reuEdits[key] = {};
     reuEdits[key][field] = v;
     localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
+    apiPost({action:'saveReuEdit', key, data: reuEdits[key]});
   }
   renderReus();
 }
@@ -2529,6 +2532,42 @@ function syncReusManual() {
   });
 }
 
+function loadCampsFromSheets() {
+  apiFetch('getCamps').then(data => {
+    if (!data || !Array.isArray(data.camps)) return;
+    const existingIds = new Set(campsData.map(c => c.id));
+    let changed = false;
+    data.camps.forEach(c => {
+      if (!c.id || existingIds.has(c.id)) return;
+      campsData.push(c);
+      changed = true;
+    });
+    if (changed) {
+      localStorage.setItem('ebombo_camps_extra', JSON.stringify(campsData.filter(x=>x.id.startsWith('custom_'))));
+      renderCamps();
+    }
+  });
+}
+
+function loadReuEditsFromSheets() {
+  apiFetch('getReuEdits').then(data => {
+    if (!data || !data.edits) return;
+    let changed = false;
+    Object.entries(data.edits).forEach(([key, edits]) => {
+      if (!reuEdits[key]) { reuEdits[key] = edits; changed = true; }
+      else {
+        Object.entries(edits).forEach(([f, v]) => {
+          if (reuEdits[key][f] === undefined) { reuEdits[key][f] = v; changed = true; }
+        });
+      }
+    });
+    if (changed) {
+      localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
+      renderReus();
+    }
+  });
+}
+
 function loadCampDailyFromSheets() {
   const now = new Date();
   const y = now.getFullYear();
@@ -2575,6 +2614,7 @@ function addCamp() {
   campsData.push(c);
   const extras = campsData.filter(x=>x.id.startsWith('custom_'));
   localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
+  apiPost({action:'addCamp', camp:c});
   document.getElementById('c-form').style.display='none';
   document.getElementById('nc-nombre').value='';
   renderCamps();
