@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<script>try{var _V='v21',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>try{var _V='v22',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -2134,7 +2134,7 @@ body{font-family:Arial,'Helvetica Neue',sans-serif;font-size:13px;color:#1f1f2e;
 .sdr-card.grace{background:#ffffff;border-left-color:#3a3596;}
 .sdr-card.lean{background:#ffffff;border-left-color:#22a86e;}
 .sdr-name{font-size:14px;font-weight:800;margin-bottom:6px;}
-.sdr-name.grace{color:#3a3596;} .sdr-name.lean{color:#22a86e;}
+.sdr-name.grace{color:#fff;} .sdr-name.lean{color:#fff;}
 .sdr-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
 .sdr-stat{font-size:12px;color:#555;}
 .sdr-stat strong{font-size:22px;font-weight:800;}
@@ -2167,7 +2167,7 @@ tr:last-child td{border-bottom:none;}
 .chart-box-full{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;margin-top:1.2rem;}
 .chart-box-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:.75rem;}
 </style>
-\x3cscript src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js">\x3c/script>
+<!--CHART_START-->\x3cscript src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js">\x3c/script><!--CHART_END-->
 </head><body>
 <div class="wrapper">
 
@@ -2198,7 +2198,7 @@ tr:last-child td{border-bottom:none;}
     <div class="card"><div class="card-lbl">HOT</div><div class="card-val w">${totHOT}</div></div>
     <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val g">${money(totPipeline)}</div></div>
   </div>
-  <div class="chart-grid">
+  <!--CHART_START--><div class="chart-grid">
     <div class="chart-box">
       <div class="chart-box-title">Estado de reuniones</div>
       <canvas id="rpt-donut" height="180"></canvas>
@@ -2207,7 +2207,7 @@ tr:last-child td{border-bottom:none;}
       <div class="chart-box-title">Reuniones por SDR</div>
       <canvas id="rpt-sdr-bar" height="180"></canvas>
     </div>
-  </div>
+  </div><!--CHART_END-->
 </div>
 
 <!-- 2. EVENTOS: GRACE + LEANDRO -->
@@ -2368,10 +2368,10 @@ ${(replySdrReport.length||prospBuckets.length)?`<div class="section">
     <tr class="tr-total"><td>TOTAL PROSP.</td><td>${prospReus.length}</td><td>100%</td><td></td></tr>
     </tbody>
   </table>`:''}
-  <div class="chart-grid" style="margin-top:1.5rem;">
+  <!--CHART_START--><div class="chart-grid" style="margin-top:1.5rem;">
     ${replySdrReport.length?`<div class="chart-box"><div class="chart-box-title">REPLY por SDR</div><canvas id="rpt-reply-bar" height="200"></canvas></div>`:'<div></div>'}
     ${prospBuckets.length?`<div class="chart-box"><div class="chart-box-title">Prospección por canal</div><canvas id="rpt-prosp-bar" height="200"></canvas></div>`:'<div></div>'}
-  </div>
+  </div><!--CHART_END-->
 </div>`:''}
 
 <!-- 4. BILIT — CARMEN -->
@@ -2439,10 +2439,10 @@ ${period==='month'&&semanasData.length?`<div class="section">
     </tbody>
   </table>
   <p style="font-size:10px;color:#9CA3AF;margin-top:4px;">Formato por SDR: agendadas / realizadas</p>
-  <div class="chart-box-full">
+  <!--CHART_START--><div class="chart-box-full">
     <div class="chart-box-title">Evolución semanal — agendadas vs. realizadas</div>
     <canvas id="rpt-sem-line" height="140"></canvas>
-  </div>
+  </div><!--CHART_END-->
 </div>`:''}
 
 </div>
@@ -2453,7 +2453,7 @@ ${period==='month'&&semanasData.length?`<div class="section">
 </div>
 
 </div>
-\x3cscript>
+<!--CHART_START-->\x3cscript>
 (function(){
   var SDR_COLORS={Leandro:'#3a3596',Grace:'#22a86e',Carmen:'#FB923C',Luziana:'#F472B6'};
   var CANAL_COLORS={Correo:'#60A5FA',LinkedIn:'#0A66C2',Llamada:'#34D399',WhatsApp:'#25D366',Otro:'#9CA3AF'};
@@ -2474,7 +2474,7 @@ ${period==='month'&&semanasData.length?`<div class="section">
   var semEl=document.getElementById('rpt-sem-line');
   if(semEl){var sm=${rptSemLine};if(sm.length){new Chart(semEl,{type:'line',data:{labels:sm.map(function(s){return 'Sem '+s.sem;}),datasets:[{label:'Agendadas',data:sm.map(function(s){return s.total;}),borderColor:'#3a3596',backgroundColor:'#3a359622',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#3a3596',pointBorderColor:'#fff',pointBorderWidth:2},{label:'Realizadas',data:sm.map(function(s){return s.real;}),borderColor:'#22a86e',backgroundColor:'#22a86e22',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#22a86e',pointBorderColor:'#fff',pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:true,position:'top',labels:{font:{size:11},padding:12,color:'#374151'}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'},grid:{color:'#f0eff8'}},x:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}});}}
 })();
-\x3c/script>
+\x3c/script><!--CHART_END-->
 </body></html>`;
 
   // Siempre descargar
@@ -2488,7 +2488,8 @@ ${period==='month'&&semanasData.length?`<div class="section">
   // También enviar por correo si hay destinatarios configurados
   const emails = getReporteEmails();
   if (emails.length) {
-    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, html);
+    const emailHtml = html.replace(/<!--CHART_START-->[\s\S]*?<!--CHART_END-->/g, '');
+    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, emailHtml);
   }
 }
 
