@@ -1884,7 +1884,16 @@ function exportReporte(period) {
 
   const semanasData = period==='month' ? [1,2,3,4,5].map(sem=>{
     const sr=periodReus.filter(r=>r.semana===sem);
-    return {sem,total:sr.length,realizadas:sr.filter(r=>r.realizada==='SI').length};
+    return {
+      sem,
+      total:sr.length,
+      realizadas:sr.filter(r=>r.realizada==='SI').length,
+      bySdr: canalSdrNames.map(sdr=>({
+        sdr,
+        agendadas: sr.filter(r=>r.sdr===sdr).length,
+        realizadas: sr.filter(r=>r.sdr===sdr&&r.realizada==='SI').length
+      }))
+    };
   }).filter(s=>s.total>0) : [];
 
   // ── Extra data for structured report ──────────────────────────
@@ -2253,39 +2262,21 @@ ${bdevReus.length?`<div class="section">
   </table>`:''}
 </div>`:''}
 
-<!-- 6. DETALLE -->
-<div class="section">
-  <div class="sec-hdr"><span class="sec-num">${[canalSdrData.length,bilitReus.length,bdevReus.length].filter(Boolean).length+3}</span><span class="sec-title">Detalle de Reuniones (${periodReus.length})</span></div>
-  ${periodReus.length ? `<table>
-    <thead><tr><th>SDR</th><th>Empresa</th><th>País</th><th>Canal</th><th>Realizada</th><th>Cotización</th><th>Estado</th><th>Monto USD</th></tr></thead>
-    <tbody>
-    ${periodReus.sort((a,b)=>a.sdr.localeCompare(b.sdr)).map(r=>`<tr>
-      <td>${r.sdr}</td>
-      <td><strong>${r.empresa}</strong></td>
-      <td>${dash(r.pais)}</td>
-      <td>${dash(r.canal)}</td>
-      <td class="${r.realizada==='SI'?'g':r.realizada==='TODAVIA'?'w':'r'}">${r.realizada||'—'}</td>
-      <td class="${r.cotizacion==='SI'?'g':''}">${r.cotizacion||'—'}</td>
-      <td>${pill(r.estado)}</td>
-      <td class="g">${money(r.monto)}</td>
-    </tr>`).join('')}
-    </tbody>
-  </table>` : '<p class="nodata">Sin reuniones para este período.</p>'}
-</div>
-
 ${period==='month'&&semanasData.length?`<div class="section">
   <div class="sec-hdr"><span class="sec-num">+</span><span class="sec-title">Evolución Semanal del Mes</span></div>
   <table>
-    <thead><tr><th>Semana</th><th>Agendadas</th><th>Realizadas</th></tr></thead>
+    <thead><tr><th>Semana</th>${canalSdrNames.map(sdr=>`<th style="font-size:11px;">${sdr}</th>`).join('')}<th>Total Ag.</th><th>Realizadas</th></tr></thead>
     <tbody>
     ${semanasData.map(s=>`<tr>
-      <td><strong>Semana ${s.sem}</strong></td>
+      <td><strong>Sem ${s.sem}</strong></td>
+      ${s.bySdr.map(x=>`<td style="font-size:11px;text-align:center;">${x.agendadas?`<span style="font-weight:700;color:#6d28d9;">${x.agendadas}</span><span style="color:#9CA3AF;"> / </span><span style="font-weight:700;color:#16a34a;">${x.realizadas}</span>`:'—'}</td>`).join('')}
       <td class="vio">${s.total}</td>
       <td class="g">${s.realizadas||'—'}</td>
     </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>${totRealizadas}</td></tr>
+    <tr class="tr-total"><td>TOTAL</td>${canalSdrNames.map(sdr=>`<td style="font-size:11px;text-align:center;">${periodReus.filter(r=>r.sdr===sdr).length} / ${periodReus.filter(r=>r.sdr===sdr&&r.realizada==='SI').length}</td>`).join('')}<td>${totAgendadas}</td><td>${totRealizadas}</td></tr>
     </tbody>
   </table>
+  <p style="font-size:10px;color:#9CA3AF;margin-top:4px;">Formato por SDR: agendadas / realizadas</p>
 </div>`:''}
 
 </div>
