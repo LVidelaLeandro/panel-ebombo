@@ -247,6 +247,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <option value="month">Este mes</option>
       <optgroup id="d-period-months" label="── Meses anteriores ──"></optgroup>
     </select>
+    <label>Vista</label>
+    <select id="d-vista" onchange="renderDash()">
+      <option value="all">Todos</option>
+      <option value="eventos">Eventos</option>
+      <option value="bilit">Bilit (Carmen)</option>
+      <option value="bdev">BDEV</option>
+      <option value="inbound">Inbound</option>
+    </select>
     <button class="btn-sm" onclick="loadData()">↻ Actualizar</button>
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
@@ -1028,13 +1036,22 @@ function filterReus(sdrF, paisF, perF) {
   });
 }
 
+function applyVista(reus, vista) {
+  if (vista === 'eventos') return reus.filter(r => ['Grace','Leandro','Luziana'].includes(r.sdr) && r.canal !== 'BDEV' && r.canal !== 'INBOUND');
+  if (vista === 'bilit')   return reus.filter(r => r.sdr === 'Carmen');
+  if (vista === 'bdev')    return reus.filter(r => r.canal === 'BDEV');
+  if (vista === 'inbound') return reus.filter(r => r.canal === 'INBOUND');
+  return reus;
+}
+
 function renderDash() {
-  const sdrF = document.getElementById('d-sdr').value;
+  const sdrF  = document.getElementById('d-sdr').value;
   const paisF = document.getElementById('d-pais').value;
   const perF  = document.getElementById('d-period').value;
+  const vistaF = (document.getElementById('d-vista')||{value:'all'}).value;
   const recs  = filtered(sdrF, paisF, perF);
   const t     = agg(recs);
-  const reus  = filterReus(sdrF, paisF, perF);
+  const reus  = applyVista(filterReus(sdrF, paisF, perF), vistaF);
 
   const realizadas = reus.filter(r=>r.realizada==='SI').length;
   const conCot     = reus.filter(r=>r.cotizacion==='SI').length;
@@ -1215,15 +1232,22 @@ function renderProspChart(reus) {
   if (!canvas) return;
   const PROSP_LABELS = ['Correo','LinkedIn','Llamada','WhatsApp','Otro'];
   const PROSP_COLORS = { Correo:'#60A5FA', LinkedIn:'#0A66C2', Llamada:'#34D399', WhatsApp:'#25D366', Otro:'#9CA3AF' };
-  const counts = { Correo:0, LinkedIn:0, Llamada:0, WhatsApp:0, Otro:0 };
+  const counts   = { Correo:0, LinkedIn:0, Llamada:0, WhatsApp:0, Otro:0 };
+  const sdrCounts = { Correo:{}, LinkedIn:{}, Llamada:{}, WhatsApp:{}, Otro:{} };
+  const bucket = r => {
+    const c = r.canal;
+    if (c==='Correo') return 'Correo';
+    if (c==='LinkedIn') return 'LinkedIn';
+    if (c==='Llamadas'||c==='Llamada') return 'Llamada';
+    if (c==='WhatsApp') return 'WhatsApp';
+    return 'Otro';
+  };
   reus.forEach(r => {
     const c = r.canal;
     if (!c || c==='REPLY' || c==='INBOUND' || c==='BDEV') return;
-    if (c==='Correo')                       counts.Correo++;
-    else if (c==='LinkedIn')                counts.LinkedIn++;
-    else if (c==='Llamadas'||c==='Llamada') counts.Llamada++;
-    else if (c==='WhatsApp')                counts.WhatsApp++;
-    else                                    counts.Otro++;
+    const b = bucket(r);
+    counts[b]++;
+    if (r.sdr) sdrCounts[b][r.sdr] = (sdrCounts[b][r.sdr]||0) + 1;
   });
   const total = Object.values(counts).reduce((s,v)=>s+v,0);
   if (!total) {
@@ -1231,7 +1255,7 @@ function renderProspChart(reus) {
     return;
   }
   const labels = PROSP_LABELS.filter(k => counts[k]>0);
-  const data = labels.map(k => counts[k]);
+  const data   = labels.map(k => counts[k]);
   const colors = labels.map(l => PROSP_COLORS[l]);
   prospChartInst = new Chart(canvas, {
     type: 'bar',
@@ -1241,7 +1265,12 @@ function renderProspChart(reus) {
         x: { beginAtZero:true, ticks:{font:{size:10},color:'#6B7280',stepSize:1}, grid:{color:'rgba(255,255,255,0.04)'} },
         y: { ticks:{font:{size:12},color:'#F9FAFB'}, grid:{display:false} },
       },
-      plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)`}} }
+      plugins: { legend:{display:false},
+        tooltip:{ callbacks:{
+          label: ctx => ` ${ctx.parsed.x} reuniones (${Math.round(ctx.parsed.x/total*100)}%)`,
+          afterLabel: ctx => Object.entries(sdrCounts[ctx.label]||{}).sort((a,b)=>b[1]-a[1]).map(([sdr,n])=>`  ${sdr}: ${n}`)
+        }}
+      }
     }
   });
 }
@@ -1913,6 +1942,23 @@ function exportReporte(period) {
       n: periodReus.filter(r=>r.sdr===sdr&&r.canal===canal).length
     })).filter(x=>x.n>0)
   }));
+
+  // Reply y Prospeccion breakdown para reporte
+  const replyReus = periodReus.filter(r => r.canal === 'REPLY');
+  const replySdrReport = canalSdrNames.map(sdr => ({sdr, n: replyReus.filter(r=>r.sdr===sdr).length})).filter(x=>x.n>0);
+  const PROSP_REP_BUCKETS = [
+    {k:'Correo',  fn: r => r.canal==='Correo'},
+    {k:'LinkedIn',fn: r => r.canal==='LinkedIn'},
+    {k:'Llamada', fn: r => r.canal==='Llamadas'||r.canal==='Llamada'},
+    {k:'WhatsApp',fn: r => r.canal==='WhatsApp'},
+    {k:'Otro',    fn: r => !['REPLY','INBOUND','BDEV','Correo','LinkedIn','Llamadas','Llamada','WhatsApp'].includes(r.canal)},
+  ];
+  const prospReus = periodReus.filter(r => r.canal && r.canal!=='REPLY' && r.canal!=='INBOUND' && r.canal!=='BDEV');
+  const prospBuckets = PROSP_REP_BUCKETS.map(({k,fn}) => {
+    const matching = prospReus.filter(fn);
+    const sdrs = canalSdrNames.map(sdr=>({sdr,n:matching.filter(r=>r.sdr===sdr).length})).filter(x=>x.n>0);
+    return {k, total: matching.length, sdrs};
+  }).filter(x=>x.total>0);
   const paisMap = { Mexico:'México', Peru:'Perú', Spain:'España' };
   const paisStats = ['Mexico','Peru','Spain'].map(pais => {
     const preus = periodReus.filter(r => r.pais === pais);
@@ -2250,24 +2296,41 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 <!-- 3. CANAL -->
-${canalSdrData.length?`<div class="section">
+${(replySdrReport.length||prospBuckets.length)?`<div class="section">
   <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-title">Canal de agendamiento</span></div>
+
+  ${replySdrReport.length?`
+  <p class="sub-lbl">REPLY — por SDR</p>
+  <table>
+    <thead><tr><th>SDR</th><th>Reuniones</th><th>%</th></tr></thead>
+    <tbody>
+    ${replySdrReport.map(x=>`<tr>
+      <td><strong>${x.sdr}</strong></td>
+      <td class="vio">${x.n}</td>
+      <td style="color:#6B7280;">${Math.round(x.n/replyReus.length*100)}%
+        <div style="background:#e5e2f8;border-radius:4px;height:5px;margin-top:3px;overflow:hidden;"><div style="background:#3a3596;height:100%;width:${Math.round(x.n/replyReus.length*100)}%;"></div></div>
+      </td>
+    </tr>`).join('')}
+    <tr class="tr-total"><td>TOTAL REPLY</td><td>${replyReus.length}</td><td>100%</td></tr>
+    </tbody>
+  </table>`:''}
+
+  ${prospBuckets.length?`
+  <p class="sub-lbl" style="margin-top:1.2rem;">Prospección — por canal</p>
   <table>
     <thead><tr><th>Canal</th><th>Reuniones</th><th>%</th><th>Por SDR</th></tr></thead>
     <tbody>
-    ${canalSdrData.map(({canal,total,sdrs})=>`<tr>
-      <td><strong>${canal}</strong></td>
+    ${prospBuckets.map(({k,total,sdrs})=>`<tr>
+      <td><strong>${k}</strong></td>
       <td class="vio">${total}</td>
-      <td style="color:#6B7280;">${totAgendadas?Math.round(total/totAgendadas*100):0}%
-        <div style="background:#e5e2f8;border-radius:4px;height:5px;margin-top:3px;overflow:hidden;">
-          <div style="background:#3a3596;height:100%;width:${totAgendadas?Math.round(total/totAgendadas*100):0}%;"></div>
-        </div>
+      <td style="color:#6B7280;">${prospReus.length?Math.round(total/prospReus.length*100):0}%
+        <div style="background:#e5e2f8;border-radius:4px;height:5px;margin-top:3px;overflow:hidden;"><div style="background:#22a86e;height:100%;width:${prospReus.length?Math.round(total/prospReus.length*100):0}%;"></div></div>
       </td>
       <td style="font-size:11px;color:#555;">${sdrs.map(x=>`<span style="margin-right:8px;"><strong>${x.sdr}</strong> ${x.n}</span>`).join('')}</td>
     </tr>`).join('')}
-    <tr class="tr-total"><td>TOTAL</td><td>${totAgendadas}</td><td>100%</td><td></td></tr>
+    <tr class="tr-total"><td>TOTAL PROSP.</td><td>${prospReus.length}</td><td>100%</td><td></td></tr>
     </tbody>
-  </table>
+  </table>`:''}
 </div>`:''}
 
 <!-- 4. BILIT — CARMEN -->
