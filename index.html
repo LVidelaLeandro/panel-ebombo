@@ -198,6 +198,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .cards{grid-template-columns:1fr 1fr;}
   .nav{padding:.5rem 1rem 0;}
 }
+/* ── Multi-select ─────────────────────────────────────────── */
+.ms{position:relative;display:inline-block;vertical-align:middle;}
+.ms-btn{background:var(--s2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;min-width:90px;white-space:nowrap;}
+.ms-btn:hover{border-color:var(--blue);}
+.ms-lbl{flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.ms-arr{font-size:10px;color:var(--muted);transition:transform .15s;}
+.ms.open .ms-arr{transform:rotate(180deg);}
+.ms-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--s1);border:1px solid var(--border2);border-radius:8px;min-width:140px;z-index:500;padding:4px 0;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.ms.open .ms-drop{display:block;}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text);transition:background .1s;}
+.ms-opt:hover{background:var(--s3);}
+.ms-opt input[type=checkbox]{accent-color:var(--blue);width:13px;height:13px;cursor:pointer;flex-shrink:0;}
+.ms-sep{height:1px;background:var(--border);margin:3px 0;}
 </style>
 </head>
 <body>
@@ -226,20 +239,28 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <section id="sec-dash" class="sec on">
   <div class="filters" style="margin-bottom:1.25rem;">
     <label>SDR</label>
-    <select id="d-sdr" onchange="renderDash()">
-      <option value="all">Todos</option>
-      <option value="Leandro">Leandro</option>
-      <option value="Grace">Grace</option>
-      <option value="Carmen">Carmen</option>
-      <option value="Luziana">Lu</option>
-    </select>
+    <div class="ms" id="ms-d-sdr" data-cb="renderDash">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="Leandro" onchange="msChange(this)"> Leandro</label>
+        <label class="ms-opt"><input type="checkbox" value="Grace" onchange="msChange(this)"> Grace</label>
+        <label class="ms-opt"><input type="checkbox" value="Carmen" onchange="msChange(this)"> Carmen</label>
+        <label class="ms-opt"><input type="checkbox" value="Luziana" onchange="msChange(this)"> Lu</label>
+      </div>
+    </div>
     <label>País</label>
-    <select id="d-pais" onchange="renderDash()">
-      <option value="all">Todos</option>
-      <option value="Mexico">México</option>
-      <option value="Peru">Perú</option>
-      <option value="Spain">España</option>
-    </select>
+    <div class="ms" id="ms-d-pais" data-cb="renderDash">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="Mexico" onchange="msChange(this)"> México</label>
+        <label class="ms-opt"><input type="checkbox" value="Peru" onchange="msChange(this)"> Perú</label>
+        <label class="ms-opt"><input type="checkbox" value="Spain" onchange="msChange(this)"> España</label>
+      </div>
+    </div>
     <label>Período</label>
     <select id="d-period" onchange="renderDash()">
       <option value="all">Todo</option>
@@ -348,11 +369,66 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <!-- ═══════ REUNIONES ═══════ -->
 <section id="sec-reus" class="sec">
   <div class="filters">
-    <label>SDR</label><select id="re-sdr" onchange="renderReus()"><option value="all">Todos</option><option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option></select>
-    <label>País</label><select id="re-pais" onchange="renderReus()"><option value="all">Todos</option><option value="PERU">Perú</option><option value="MEXICO">México</option><option value="ESPANA">España</option></select>
-    <label>Mes</label><select id="re-mes" onchange="renderReus()"><option value="all">Todos</option><option value="2">Mes 2</option><option value="3">Mes 3</option><option value="4">Mes 4</option><option value="5">Mes 5</option><option value="6">Mes 6</option></select>
-    <label>Estado</label><select id="re-estado" onchange="renderReus()"><option value="all">Todos</option><option value="WON">WON</option><option value="LOST">LOST</option><option value="HOT">HOT</option><option value="SI">Con propuesta</option><option value="NO">Sin propuesta</option></select>
-    <label>Realizada</label><select id="re-realizada" onchange="renderReus()"><option value="all">Todas</option><option value="SI">Sí</option><option value="NO">No</option><option value="TODAVIA">Todavía</option></select>
+    <label>SDR</label>
+    <div class="ms" id="ms-re-sdr" data-cb="renderReus">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="Leandro" onchange="msChange(this)"> Leandro</label>
+        <label class="ms-opt"><input type="checkbox" value="Grace" onchange="msChange(this)"> Grace</label>
+        <label class="ms-opt"><input type="checkbox" value="Carmen" onchange="msChange(this)"> Carmen</label>
+        <label class="ms-opt"><input type="checkbox" value="Luziana" onchange="msChange(this)"> Luziana</label>
+      </div>
+    </div>
+    <label>País</label>
+    <div class="ms" id="ms-re-pais" data-cb="renderReus">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="PERU" onchange="msChange(this)"> Perú</label>
+        <label class="ms-opt"><input type="checkbox" value="MEXICO" onchange="msChange(this)"> México</label>
+        <label class="ms-opt"><input type="checkbox" value="ESPANA" onchange="msChange(this)"> España</label>
+      </div>
+    </div>
+    <label>Mes</label>
+    <div class="ms" id="ms-re-mes" data-cb="renderReus">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="2" onchange="msChange(this)"> Mes 2</label>
+        <label class="ms-opt"><input type="checkbox" value="3" onchange="msChange(this)"> Mes 3</label>
+        <label class="ms-opt"><input type="checkbox" value="4" onchange="msChange(this)"> Mes 4</label>
+        <label class="ms-opt"><input type="checkbox" value="5" onchange="msChange(this)"> Mes 5</label>
+        <label class="ms-opt"><input type="checkbox" value="6" onchange="msChange(this)"> Mes 6</label>
+      </div>
+    </div>
+    <label>Estado</label>
+    <div class="ms" id="ms-re-estado" data-cb="renderReus">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="WON" onchange="msChange(this)"> WON</label>
+        <label class="ms-opt"><input type="checkbox" value="LOST" onchange="msChange(this)"> LOST</label>
+        <label class="ms-opt"><input type="checkbox" value="HOT" onchange="msChange(this)"> HOT</label>
+        <label class="ms-opt"><input type="checkbox" value="SI" onchange="msChange(this)"> Con propuesta</label>
+        <label class="ms-opt"><input type="checkbox" value="NO" onchange="msChange(this)"> Sin propuesta</label>
+      </div>
+    </div>
+    <label>Realizada</label>
+    <div class="ms" id="ms-re-realizada" data-cb="renderReus">
+      <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todas</span><span class="ms-arr">▾</span></button>
+      <div class="ms-drop">
+        <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todas</label>
+        <div class="ms-sep"></div>
+        <label class="ms-opt"><input type="checkbox" value="SI" onchange="msChange(this)"> Sí</label>
+        <label class="ms-opt"><input type="checkbox" value="NO" onchange="msChange(this)"> No</label>
+        <label class="ms-opt"><input type="checkbox" value="TODAVIA" onchange="msChange(this)"> Todavía</label>
+      </div>
+    </div>
     </div>
     <button class="btn-primary" onclick="showAddReu()" style="font-size:12px;padding:8px 16px;">+ Nueva reunión</button>
     <button onclick="syncReusManual()" id="sync-reus-btn" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">↻ Sincronizar</button>
@@ -428,15 +504,30 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
       <div class="filters">
         <label>SDR</label>
-        <select id="c-sdr" onchange="renderCamps()">
-          <option value="all">Todos</option>
-          <option>Leandro</option><option>Grace</option><option>Carmen</option><option>Luziana</option><option>Grupal</option>
-        </select>
+        <div class="ms" id="ms-c-sdr" data-cb="renderCamps">
+          <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+          <div class="ms-drop">
+            <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+            <div class="ms-sep"></div>
+            <label class="ms-opt"><input type="checkbox" value="Leandro" onchange="msChange(this)"> Leandro</label>
+            <label class="ms-opt"><input type="checkbox" value="Grace" onchange="msChange(this)"> Grace</label>
+            <label class="ms-opt"><input type="checkbox" value="Carmen" onchange="msChange(this)"> Carmen</label>
+            <label class="ms-opt"><input type="checkbox" value="Luziana" onchange="msChange(this)"> Luziana</label>
+            <label class="ms-opt"><input type="checkbox" value="Grupal" onchange="msChange(this)"> Grupal</label>
+          </div>
+        </div>
         <label>País</label>
-        <select id="c-pais" onchange="renderCamps()">
-          <option value="all">Todos</option>
-          <option>España</option><option>México</option><option>Perú</option><option>Global</option>
-        </select>
+        <div class="ms" id="ms-c-pais" data-cb="renderCamps">
+          <button class="ms-btn" type="button" onclick="toggleMs(this)"><span class="ms-lbl">Todos</span><span class="ms-arr">▾</span></button>
+          <div class="ms-drop">
+            <label class="ms-opt"><input type="checkbox" value="all" onchange="msChange(this)" checked> Todos</label>
+            <div class="ms-sep"></div>
+            <label class="ms-opt"><input type="checkbox" value="España" onchange="msChange(this)"> España</label>
+            <label class="ms-opt"><input type="checkbox" value="México" onchange="msChange(this)"> México</label>
+            <label class="ms-opt"><input type="checkbox" value="Perú" onchange="msChange(this)"> Perú</label>
+            <label class="ms-opt"><input type="checkbox" value="Global" onchange="msChange(this)"> Global</label>
+          </div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <button class="btn-sm" onclick="prevCampMonth()" style="padding:4px 10px;font-size:14px;">‹</button>
@@ -479,6 +570,41 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 </main>
 
 <script>
+// ─── MULTI-SELECT ─────────────────────────────────────────────
+function toggleMs(btn) {
+  const wrap = btn.closest('.ms');
+  const isOpen = wrap.classList.contains('open');
+  document.querySelectorAll('.ms.open').forEach(m => m.classList.remove('open'));
+  if (!isOpen) wrap.classList.add('open');
+}
+function msChange(cb) {
+  const wrap = cb.closest('.ms');
+  const allBox = wrap.querySelector('input[value="all"]');
+  const rest   = [...wrap.querySelectorAll('input:not([value="all"])')];
+  if (cb.value === 'all') {
+    rest.forEach(i => i.checked = false);
+    allBox.checked = true;
+  } else {
+    allBox.checked = false;
+    if (rest.every(i => !i.checked)) allBox.checked = true;
+  }
+  const sel = rest.filter(i => i.checked);
+  const lbl = wrap.querySelector('.ms-lbl');
+  lbl.textContent = sel.length === 0 ? 'Todos' : sel.length === 1 ? sel[0].dataset.label || sel[0].value : sel.length + ' selec.';
+  const fn = wrap.dataset.cb;
+  if (fn && window[fn]) window[fn]();
+}
+function getMsVal(id) {
+  const wrap = document.getElementById('ms-' + id);
+  if (!wrap) { const s = document.getElementById(id); return s ? [s.value] : ['all']; }
+  const allBox = wrap.querySelector('input[value="all"]');
+  if (allBox && allBox.checked) return ['all'];
+  const checked = [...wrap.querySelectorAll('input:not([value="all"]):checked')].map(i => i.value);
+  return checked.length ? checked : ['all'];
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.ms')) document.querySelectorAll('.ms.open').forEach(m => m.classList.remove('open'));
+});
 // ─── CONFIG ───────────────────────────────────────────────────
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyZrKTeS4W3kFhpe0JdKYfpUuQuQYKA-Ppz0-4naLhpRExH4pYTe_ECDMRfLucNwWxxpw/exec';
 
@@ -968,8 +1094,8 @@ function normalizeRecord(r) {
 function filtered(sdrF, paisF, periodF) {
   const now = new Date();
   return records.filter(r => {
-    if (sdrF!=='all' && r.sdr!==sdrF) return false;
-    if (paisF!=='all' && r.pais!==paisF) return false;
+    if (!sdrF.includes('all') && !sdrF.includes(r.sdr)) return false;
+    if (!paisF.includes('all') && !paisF.includes(r.pais)) return false;
     if (periodF==='week') { if((now-new Date(r.fecha))/86400000>7) return false; }
     else if (periodF==='month') {
       const d=new Date(r.fecha);
@@ -1025,10 +1151,10 @@ function filterReus(sdrF, paisF, perF) {
   const now3 = new Date();
   const cm = now3.getMonth()+1;
   const cs = Math.ceil(now3.getDate()/7);
-  const pf = paisF==='Mexico'?'MEXICO':paisF==='Peru'?'PERU':paisF==='Spain'?'ESPANA':paisF;
+  const pf = paisF.includes('all') ? ['all'] : paisF.map(p => p==='Mexico'?'MEXICO':p==='Peru'?'PERU':p==='Spain'?'ESPANA':p);
   return getAllReus().filter(r => {
-    if (sdrF!=='all' && r.sdr!==sdrF) return false;
-    if (pf!=='all' && r.pais!==pf) return false;
+    if (!sdrF.includes('all') && !sdrF.includes(r.sdr)) return false;
+    if (!pf.includes('all') && !pf.includes(r.pais)) return false;
     if (perF==='week')  return r.mes===cm && r.semana===cs;
     if (perF==='month') return r.mes===cm;
     if (perF.startsWith('mes_')) return r.mes === parseInt(perF.split('_')[1]);
@@ -1045,8 +1171,8 @@ function applyVista(reus, vista) {
 }
 
 function renderDash() {
-  const sdrF  = document.getElementById('d-sdr').value;
-  const paisF = document.getElementById('d-pais').value;
+  const sdrF  = getMsVal('d-sdr');
+  const paisF = getMsVal('d-pais');
   const perF  = document.getElementById('d-period').value;
   const vistaF = (document.getElementById('d-vista')||{value:'all'}).value;
   const recs  = filtered(sdrF, paisF, perF);
@@ -1696,21 +1822,25 @@ function miTab(t) {
 
 // ─── REUNIONES ───────────────────────────────────────────────
 function filteredReus() {
-  const sdrF  = document.getElementById('re-sdr').value;
-  const paisF = document.getElementById('re-pais').value;
-  const mesF  = document.getElementById('re-mes').value;
-  const estF  = document.getElementById('re-estado').value;
-  const realF = document.getElementById('re-realizada').value;
+  const sdrF  = getMsVal('re-sdr');
+  const paisF = getMsVal('re-pais');
+  const mesF  = getMsVal('re-mes');
+  const estF  = getMsVal('re-estado');
+  const realF = getMsVal('re-realizada');
   return getAllReus().filter(r => {
-    if (sdrF!=='all' && r.sdr!==sdrF) return false;
-    if (paisF!=='all' && r.pais!==paisF) return false;
-    if (mesF!=='all' && r.mes!==parseInt(mesF)) return false;
-    if (estF==='WON' && r.estado!=='WON') return false;
-    if (estF==='LOST' && r.estado!=='LOST') return false;
-    if (estF==='HOT' && r.estado!=='HOT') return false;
-    if (estF==='SI' && r.cotizacion!=='SI') return false;
-    if (estF==='NO' && r.cotizacion!=='NO') return false;
-    if (realF!=='all' && r.realizada!==realF) return false;
+    if (!sdrF.includes('all') && !sdrF.includes(r.sdr)) return false;
+    if (!paisF.includes('all') && !paisF.includes(r.pais)) return false;
+    if (!mesF.includes('all') && !mesF.includes(String(r.mes))) return false;
+    if (!estF.includes('all')) {
+      const wantWon  = estF.includes('WON'),  wantLost = estF.includes('LOST'),
+            wantHot  = estF.includes('HOT'),  wantCotSI= estF.includes('SI'),
+            wantCotNO= estF.includes('NO');
+      const ok = (wantWon && r.estado==='WON') || (wantLost && r.estado==='LOST') ||
+                 (wantHot && r.estado==='HOT') || (wantCotSI && r.cotizacion==='SI') ||
+                 (wantCotNO && r.cotizacion==='NO');
+      if (!ok) return false;
+    }
+    if (!realF.includes('all') && !realF.includes(r.realizada)) return false;
     return true;
   });
 }
@@ -2477,13 +2607,150 @@ ${period==='month'&&semanasData.length?`<div class="section">
 \x3c/script><!--CHART_END-->
 </body></html>`;
 
-  // Siempre descargar
-  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.html`;
-  const a = Object.assign(document.createElement('a'), {
-    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
-    download: fname
-  });
-  a.click();
+  // ── Generar Word (.docx) ─────────────────────────────────────
+  const money2 = v => v ? '$'+Number(v).toLocaleString() : '—';
+  const dash2  = v => (v!==null&&v!==undefined&&v!=='') ? v : '—';
+  const TH = (t,extra='') => `<th style="background:#3a3596;color:#fff;padding:7px 10px;text-align:left;font-size:9pt;${extra}">${t}</th>`;
+  const TD = (t,extra='') => `<td style="padding:6px 10px;border-bottom:1px solid #e8e4f8;font-size:10pt;${extra}">${t!==null&&t!==undefined&&t!==''?t:'—'}</td>`;
+  const SEC = (n,t) => `<h2 style="font-size:13pt;color:#3a3596;border-bottom:2px solid #3a3596;padding-bottom:4px;margin:24px 0 10px;">${n}. ${t}</h2>`;
+  const KPI = (lbl,val,col='#3a3596') => `<td style="padding:10px 14px;border:1px solid #d8d3f0;border-radius:4px;text-align:center;min-width:90px;"><div style="font-size:8pt;color:#666;text-transform:uppercase;margin-bottom:3px;">${lbl}</div><div style="font-size:20pt;font-weight:bold;color:${col};">${val}</div></td>`;
+
+  const wordHtml = `<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office'
+      xmlns:w='urn:schemas-microsoft-com:office:word'
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'>
+<title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo</title>
+<style>
+body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f1f2e;margin:2cm 2.5cm;}
+h1{font-size:20pt;color:#3a3596;margin:0 0 4px;}
+p{margin:3px 0;}
+table{border-collapse:collapse;width:100%;margin-bottom:12px;}
+tr:nth-child(even) td{background:#f5f3ff;}
+</style></head><body>
+
+<div style="background:#3a3596;padding:18px 22px;margin-bottom:20px;">
+  <h1 style="color:#fff;font-size:20pt;margin:0 0 4px;">Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo</h1>
+  <p style="color:#c4bef0;font-size:11pt;margin:0 0 6px;">${period==='week'?`Semana ${curSemana} — `:''}${MONTHS[curMonth-1]} ${curYear}</p>
+  <p style="color:#a89ede;font-size:9pt;margin:0;">Emisión: ${dateLabel} &nbsp;·&nbsp; Equipo: SDR Outbound + Bilit + BDEV</p>
+</div>
+
+${SEC(1,'Resumen Ejecutivo')}
+<table><tr>
+${KPI('Reuniones',totAgendadas)}
+${KPI('Realizadas',totRealizadas,'#22a86e')}
+${KPI('Todavía',totTodavia,'#e6a817')}
+${KPI('Con cotización',totConCot)}
+${KPI('WON',totWON,'#22a86e')}
+${KPI('HOT',totHOT,'#e6a817')}
+${KPI('Pipeline',money2(totPipeline),'#22a86e')}
+</tr></table>
+
+${sdrStats.length ? `${SEC(2,'Detalle por SDR')}
+<table>
+<thead><tr>${TH('SDR')}${TH('Contactados')}${TH('Agendadas')}${TH('Realizadas')}${TH('Todavía')}${TH('Con cot.')}${TH('WON')}${TH('HOT')}${TH('Pipeline')}</tr></thead>
+<tbody>
+${sdrStats.map(s=>`<tr>
+${TD(`<strong>${s.sdr}</strong>`)}
+${TD(s.campContactos||s.contactadosLog||'—')}
+${TD(s.agendadas,'color:#3a3596;font-weight:bold;')}
+${TD(s.realizadas,'color:#22a86e;font-weight:bold;')}
+${TD(s.todavia||'—','color:#e6a817;')}
+${TD(s.conCot||'—')}
+${TD(s.won||'—','color:#22a86e;')}
+${TD(s.hot||'—','color:#e6a817;')}
+${TD(money2(s.pipeline),'color:#22a86e;')}
+</tr>`).join('')}
+<tr style="background:#ede8f8;font-weight:bold;border-top:2px solid #a89ede;">
+${TD('<strong>TOTAL</strong>')}${TD('')}${TD(totAgendadas,'font-weight:bold;color:#3a3596;')}${TD(totRealizadas,'font-weight:bold;color:#22a86e;')}${TD(totTodavia,'font-weight:bold;color:#e6a817;')}${TD(totConCot)}${TD(totWON,'color:#22a86e;')}${TD(totHOT,'color:#e6a817;')}${TD(money2(totPipeline),'color:#22a86e;')}
+</tr>
+</tbody></table>` : ''}
+
+${canalSdrData.length ? `${SEC(3,'Por Canal de Agendamiento')}
+<table>
+<thead><tr>${TH('Canal')}${TH('Total')}${canalSdrNames.map(s=>TH(s)).join('')}</tr></thead>
+<tbody>
+${canalSdrData.map(c=>`<tr>
+${TD(`<strong>${c.canal}</strong>`)}
+${TD(c.total,'font-weight:bold;color:#3a3596;')}
+${canalSdrNames.map(sdr=>TD(c.sdrs.find(x=>x.sdr===sdr)?.n||'—')).join('')}
+</tr>`).join('')}
+</tbody></table>` : ''}
+
+${paisStats.length ? `${SEC(4,'Por País')}
+<table>
+<thead><tr>${TH('País')}${TH('Agendadas')}${TH('Realizadas')}${TH('Con cot.')}${TH('Pipeline')}${TH('Conv. %')}</tr></thead>
+<tbody>
+${paisStats.map(p=>`<tr>
+${TD(`<strong>${p.label}</strong>`)}
+${TD(p.agendadas)}
+${TD(p.realizadas,'color:#22a86e;font-weight:bold;')}
+${TD(p.conCot)}
+${TD(money2(p.pipeline),'color:#22a86e;')}
+${TD(p.conv+'%')}
+</tr>`).join('')}
+</tbody></table>` : ''}
+
+${campPeriod.length ? `${SEC(5,'Campañas (Contactos)')}
+<table>
+<thead><tr>${TH('Campaña')}${TH('SDR')}${TH('Contactos')}</tr></thead>
+<tbody>
+${campPeriod.map(c=>`<tr>${TD(c.nombre||c.id)}${TD(c.sdr||'—')}${TD(c.total,'font-weight:bold;color:#3a3596;')}</tr>`).join('')}
+<tr style="background:#ede8f8;font-weight:bold;border-top:2px solid #a89ede;">${TD('<strong>TOTAL</strong>')}${TD('')}${TD(totCampCont,'font-weight:bold;color:#3a3596;')}</tr>
+</tbody></table>` : ''}
+
+${actRecs.length ? `${SEC(6,'Detalle de Actividad')}
+<table>
+<thead><tr>${TH('Fecha')}${TH('SDR')}${TH('Contactados')}${TH('Correos')}${TH('LinkedIn')}${TH('Llamadas')}${TH('WhatsApp')}</tr></thead>
+<tbody>
+${actRecs.slice(-50).map(r=>`<tr>
+${TD(r.fecha)}
+${TD(r.sdr)}
+${TD(r.contactados||'—')}
+${TD(r.correos||'—')}
+${TD(r.linkedin||'—')}
+${TD(r.llamadas||'—')}
+${TD(r.whatsapp||'—')}
+</tr>`).join('')}
+</tbody></table>` : ''}
+
+${periodReus.length ? `${SEC(7,'Detalle de Reuniones')}
+<table>
+<thead><tr>${TH('Fecha')}${TH('SDR')}${TH('Empresa')}${TH('País')}${TH('Canal')}${TH('Realizada')}${TH('Estado')}${TH('Cotización')}${TH('Monto')}</tr></thead>
+<tbody>
+${periodReus.map(r=>`<tr>
+${TD(r.fecha||'—')}
+${TD(r.sdr||'—')}
+${TD(r.empresa||'—')}
+${TD(r.pais||'—')}
+${TD(r.canal||'—')}
+${TD(r.realizada||'—',r.realizada==='SI'?'color:#22a86e;font-weight:bold;':r.realizada==='TODAVIA'?'color:#e6a817;':'')}
+${TD(r.estado||'—',r.estado==='WON'?'color:#22a86e;font-weight:bold;':r.estado==='LOST'?'color:#cc0000;':r.estado==='HOT'?'color:#e6a817;':'')}
+${TD(r.cotizacion||'—')}
+${TD(r.monto?money2(r.monto):'—','color:#22a86e;')}
+</tr>`).join('')}
+</tbody></table>` : ''}
+
+<div style="background:#3a3596;padding:12px 22px;margin-top:24px;">
+  <p style="color:#d4cff0;font-size:10pt;margin:0;">eBombo SDR &nbsp;·&nbsp; Reporte Interno ${MONTHS[curMonth-1]} ${curYear} &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Generado el ${dateLabel}</p>
+</div>
+</body></html>`;
+
+  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.docx`;
+  if (typeof htmlDocx !== 'undefined') {
+    const blob = htmlDocx.asBlob(wordHtml);
+    const url  = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: fname });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } else {
+    // fallback: descarga como HTML si la librería no cargó
+    const a = Object.assign(document.createElement('a'), {
+      href: 'data:text/html;charset=utf-8,' + encodeURIComponent(wordHtml),
+      download: fname.replace('.docx','.html')
+    });
+    a.click();
+  }
 
   // También enviar por correo si hay destinatarios configurados
   const emails = getReporteEmails();
@@ -2789,11 +3056,11 @@ function saveDayField(campId, day, value, y, m) {
 }
 
 function renderCampCards() {
-  const sdrF  = document.getElementById('c-sdr').value;
-  const paisF = document.getElementById('c-pais').value;
+  const sdrF  = getMsVal('c-sdr');
+  const paisF = getMsVal('c-pais');
   const recs  = campsData.filter(c=>{
-    if(sdrF!=='all'&&c.sdr!==sdrF) return false;
-    if(paisF!=='all'&&c.pais!==paisF) return false;
+    if(!sdrF.includes('all')&&!sdrF.includes(c.sdr)) return false;
+    if(!paisF.includes('all')&&!paisF.includes(c.pais)) return false;
     return true;
   });
   const daily = loadDailyData(campViewYear, campViewMonth);
@@ -2808,11 +3075,11 @@ function renderCampCards() {
 }
 
 function renderCamps() {
-  const sdrF  = document.getElementById('c-sdr').value;
-  const paisF = document.getElementById('c-pais').value;
+  const sdrF  = getMsVal('c-sdr');
+  const paisF = getMsVal('c-pais');
   const recs  = campsData.filter(c=>{
-    if(sdrF!=='all'&&c.sdr!==sdrF) return false;
-    if(paisF!=='all'&&c.pais!==paisF) return false;
+    if(!sdrF.includes('all')&&!sdrF.includes(c.sdr)) return false;
+    if(!paisF.includes('all')&&!paisF.includes(c.pais)) return false;
     return true;
   });
 
