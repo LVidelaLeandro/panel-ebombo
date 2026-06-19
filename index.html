@@ -1155,9 +1155,9 @@ function filterReus(sdrF, paisF, perF) {
   return getAllReus().filter(r => {
     if (!sdrF.includes('all') && !sdrF.includes(r.sdr)) return false;
     if (!pf.includes('all') && !pf.includes(r.pais)) return false;
-    if (perF==='week')  return r.mes===cm && r.semana===cs;
-    if (perF==='month') return r.mes===cm;
-    if (perF.startsWith('mes_')) return r.mes === parseInt(perF.split('_')[1]);
+    if (perF==='week')  return Number(r.mes)===cm && Number(r.semana)===cs;
+    if (perF==='month') return Number(r.mes)===cm;
+    if (perF.startsWith('mes_')) return Number(r.mes) === parseInt(perF.split('_')[1]);
     return true;
   });
 }
