@@ -1198,7 +1198,7 @@ function renderDash() {
 
   const sdrRows = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
     const sreus = reus.filter(r=>r.sdr===sdr);
-    const sr    = filtered(sdr, paisF, perF);
+    const sr    = filtered([sdr], paisF, perF);
     const s     = agg(sr);
     const real  = sreus.filter(r=>r.realizada==='SI').length;
     const ob    = sreus.filter(r=>r.canal!=='INBOUND').length;
@@ -1221,7 +1221,7 @@ function renderDash() {
   document.getElementById('d-sdr-tbl').innerHTML = sdrRows||'<tr class="empty-row"><td colspan="7">Sin datos para este período</td></tr>';
 
   const paisRows = ['Mexico','Peru','Spain'].map(p => {
-    const preus = filterReus(sdrF, p, perF);
+    const preus = filterReus(sdrF, [p], perF);
     const real  = preus.filter(r=>r.realizada==='SI').length;
     const pip   = preus.reduce((a,r)=>a+(r.monto||0),0);
     const ob    = preus.filter(r=>r.canal!=='INBOUND').length;
@@ -2607,150 +2607,13 @@ ${period==='month'&&semanasData.length?`<div class="section">
 \x3c/script><!--CHART_END-->
 </body></html>`;
 
-  // ── Generar Word (.docx) ─────────────────────────────────────
-  const money2 = v => v ? '$'+Number(v).toLocaleString() : '—';
-  const dash2  = v => (v!==null&&v!==undefined&&v!=='') ? v : '—';
-  const TH = (t,extra='') => `<th style="background:#3a3596;color:#fff;padding:7px 10px;text-align:left;font-size:9pt;${extra}">${t}</th>`;
-  const TD = (t,extra='') => `<td style="padding:6px 10px;border-bottom:1px solid #e8e4f8;font-size:10pt;${extra}">${t!==null&&t!==undefined&&t!==''?t:'—'}</td>`;
-  const SEC = (n,t) => `<h2 style="font-size:13pt;color:#3a3596;border-bottom:2px solid #3a3596;padding-bottom:4px;margin:24px 0 10px;">${n}. ${t}</h2>`;
-  const KPI = (lbl,val,col='#3a3596') => `<td style="padding:10px 14px;border:1px solid #d8d3f0;border-radius:4px;text-align:center;min-width:90px;"><div style="font-size:8pt;color:#666;text-transform:uppercase;margin-bottom:3px;">${lbl}</div><div style="font-size:20pt;font-weight:bold;color:${col};">${val}</div></td>`;
-
-  const wordHtml = `<!DOCTYPE html>
-<html xmlns:o='urn:schemas-microsoft-com:office:office'
-      xmlns:w='urn:schemas-microsoft-com:office:word'
-      xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset='utf-8'>
-<title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo</title>
-<style>
-body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f1f2e;margin:2cm 2.5cm;}
-h1{font-size:20pt;color:#3a3596;margin:0 0 4px;}
-p{margin:3px 0;}
-table{border-collapse:collapse;width:100%;margin-bottom:12px;}
-tr:nth-child(even) td{background:#f5f3ff;}
-</style></head><body>
-
-<div style="background:#3a3596;padding:18px 22px;margin-bottom:20px;">
-  <h1 style="color:#fff;font-size:20pt;margin:0 0 4px;">Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo</h1>
-  <p style="color:#c4bef0;font-size:11pt;margin:0 0 6px;">${period==='week'?`Semana ${curSemana} — `:''}${MONTHS[curMonth-1]} ${curYear}</p>
-  <p style="color:#a89ede;font-size:9pt;margin:0;">Emisión: ${dateLabel} &nbsp;·&nbsp; Equipo: SDR Outbound + Bilit + BDEV</p>
-</div>
-
-${SEC(1,'Resumen Ejecutivo')}
-<table><tr>
-${KPI('Reuniones',totAgendadas)}
-${KPI('Realizadas',totRealizadas,'#22a86e')}
-${KPI('Todavía',totTodavia,'#e6a817')}
-${KPI('Con cotización',totConCot)}
-${KPI('WON',totWON,'#22a86e')}
-${KPI('HOT',totHOT,'#e6a817')}
-${KPI('Pipeline',money2(totPipeline),'#22a86e')}
-</tr></table>
-
-${sdrStats.length ? `${SEC(2,'Detalle por SDR')}
-<table>
-<thead><tr>${TH('SDR')}${TH('Contactados')}${TH('Agendadas')}${TH('Realizadas')}${TH('Todavía')}${TH('Con cot.')}${TH('WON')}${TH('HOT')}${TH('Pipeline')}</tr></thead>
-<tbody>
-${sdrStats.map(s=>`<tr>
-${TD(`<strong>${s.sdr}</strong>`)}
-${TD(s.campContactos||s.contactadosLog||'—')}
-${TD(s.agendadas,'color:#3a3596;font-weight:bold;')}
-${TD(s.realizadas,'color:#22a86e;font-weight:bold;')}
-${TD(s.todavia||'—','color:#e6a817;')}
-${TD(s.conCot||'—')}
-${TD(s.won||'—','color:#22a86e;')}
-${TD(s.hot||'—','color:#e6a817;')}
-${TD(money2(s.pipeline),'color:#22a86e;')}
-</tr>`).join('')}
-<tr style="background:#ede8f8;font-weight:bold;border-top:2px solid #a89ede;">
-${TD('<strong>TOTAL</strong>')}${TD('')}${TD(totAgendadas,'font-weight:bold;color:#3a3596;')}${TD(totRealizadas,'font-weight:bold;color:#22a86e;')}${TD(totTodavia,'font-weight:bold;color:#e6a817;')}${TD(totConCot)}${TD(totWON,'color:#22a86e;')}${TD(totHOT,'color:#e6a817;')}${TD(money2(totPipeline),'color:#22a86e;')}
-</tr>
-</tbody></table>` : ''}
-
-${canalSdrData.length ? `${SEC(3,'Por Canal de Agendamiento')}
-<table>
-<thead><tr>${TH('Canal')}${TH('Total')}${canalSdrNames.map(s=>TH(s)).join('')}</tr></thead>
-<tbody>
-${canalSdrData.map(c=>`<tr>
-${TD(`<strong>${c.canal}</strong>`)}
-${TD(c.total,'font-weight:bold;color:#3a3596;')}
-${canalSdrNames.map(sdr=>TD(c.sdrs.find(x=>x.sdr===sdr)?.n||'—')).join('')}
-</tr>`).join('')}
-</tbody></table>` : ''}
-
-${paisStats.length ? `${SEC(4,'Por País')}
-<table>
-<thead><tr>${TH('País')}${TH('Agendadas')}${TH('Realizadas')}${TH('Con cot.')}${TH('Pipeline')}${TH('Conv. %')}</tr></thead>
-<tbody>
-${paisStats.map(p=>`<tr>
-${TD(`<strong>${p.label}</strong>`)}
-${TD(p.agendadas)}
-${TD(p.realizadas,'color:#22a86e;font-weight:bold;')}
-${TD(p.conCot)}
-${TD(money2(p.pipeline),'color:#22a86e;')}
-${TD(p.conv+'%')}
-</tr>`).join('')}
-</tbody></table>` : ''}
-
-${campPeriod.length ? `${SEC(5,'Campañas (Contactos)')}
-<table>
-<thead><tr>${TH('Campaña')}${TH('SDR')}${TH('Contactos')}</tr></thead>
-<tbody>
-${campPeriod.map(c=>`<tr>${TD(c.nombre||c.id)}${TD(c.sdr||'—')}${TD(c.total,'font-weight:bold;color:#3a3596;')}</tr>`).join('')}
-<tr style="background:#ede8f8;font-weight:bold;border-top:2px solid #a89ede;">${TD('<strong>TOTAL</strong>')}${TD('')}${TD(totCampCont,'font-weight:bold;color:#3a3596;')}</tr>
-</tbody></table>` : ''}
-
-${actRecs.length ? `${SEC(6,'Detalle de Actividad')}
-<table>
-<thead><tr>${TH('Fecha')}${TH('SDR')}${TH('Contactados')}${TH('Correos')}${TH('LinkedIn')}${TH('Llamadas')}${TH('WhatsApp')}</tr></thead>
-<tbody>
-${actRecs.slice(-50).map(r=>`<tr>
-${TD(r.fecha)}
-${TD(r.sdr)}
-${TD(r.contactados||'—')}
-${TD(r.correos||'—')}
-${TD(r.linkedin||'—')}
-${TD(r.llamadas||'—')}
-${TD(r.whatsapp||'—')}
-</tr>`).join('')}
-</tbody></table>` : ''}
-
-${periodReus.length ? `${SEC(7,'Detalle de Reuniones')}
-<table>
-<thead><tr>${TH('Fecha')}${TH('SDR')}${TH('Empresa')}${TH('País')}${TH('Canal')}${TH('Realizada')}${TH('Estado')}${TH('Cotización')}${TH('Monto')}</tr></thead>
-<tbody>
-${periodReus.map(r=>`<tr>
-${TD(r.fecha||'—')}
-${TD(r.sdr||'—')}
-${TD(r.empresa||'—')}
-${TD(r.pais||'—')}
-${TD(r.canal||'—')}
-${TD(r.realizada||'—',r.realizada==='SI'?'color:#22a86e;font-weight:bold;':r.realizada==='TODAVIA'?'color:#e6a817;':'')}
-${TD(r.estado||'—',r.estado==='WON'?'color:#22a86e;font-weight:bold;':r.estado==='LOST'?'color:#cc0000;':r.estado==='HOT'?'color:#e6a817;':'')}
-${TD(r.cotizacion||'—')}
-${TD(r.monto?money2(r.monto):'—','color:#22a86e;')}
-</tr>`).join('')}
-</tbody></table>` : ''}
-
-<div style="background:#3a3596;padding:12px 22px;margin-top:24px;">
-  <p style="color:#d4cff0;font-size:10pt;margin:0;">eBombo SDR &nbsp;·&nbsp; Reporte Interno ${MONTHS[curMonth-1]} ${curYear} &nbsp;·&nbsp; Confidencial &nbsp;·&nbsp; Generado el ${dateLabel}</p>
-</div>
-</body></html>`;
-
-  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.docx`;
-  if (typeof htmlDocx !== 'undefined') {
-    const blob = htmlDocx.asBlob(wordHtml);
-    const url  = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement('a'), { href: url, download: fname });
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } else {
-    // fallback: descarga como HTML si la librería no cargó
-    const a = Object.assign(document.createElement('a'), {
-      href: 'data:text/html;charset=utf-8,' + encodeURIComponent(wordHtml),
-      download: fname.replace('.docx','.html')
-    });
-    a.click();
-  }
+  // Siempre descargar
+  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.html`;
+  const a = Object.assign(document.createElement('a'), {
+    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
+    download: fname
+  });
+  a.click();
 
   // También enviar por correo si hay destinatarios configurados
   const emails = getReporteEmails();
