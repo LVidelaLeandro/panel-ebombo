@@ -1021,10 +1021,12 @@ function apiFetch(action) {
     s.src = url;
     s.onerror = (err) => {
       console.error('[apiFetch] Error al cargar el script JSONP (URL inválida o red caída):', url, err);
+      try{document.head.removeChild(s);}catch(e){}
       clearTimeout(t);
       delete window[cb];
       resolve(null);
     };
+    s.onload = () => { try{document.head.removeChild(s);}catch(e){}};
     document.head.appendChild(s);
   });
 }
@@ -1038,6 +1040,36 @@ async function apiPost(body) {
     console.error('[apiPost] Error en POST:', e);
     return false;
   }
+}
+
+// ─── AUTO-SYNC ───────────────────────────────────────────────
+let _syncBusy   = false;
+let _lastSyncTs = null;
+
+async function autoSync() {
+  if (_syncBusy) return;
+  // No interrumpir al usuario si está editando un campo
+  const ae = document.activeElement;
+  if (ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.isContentEditable)) return;
+  _syncBusy = true;
+  setSyncStatus('spin', 'actualizando...');
+  try {
+    await loadData();
+    loadReusFromSheets();
+    loadReuEditsFromSheets();
+    loadCampDailyFromSheets();
+    _lastSyncTs = Date.now();
+  } catch(e) {
+    setSyncStatus('off', 'sin conexión');
+  } finally {
+    _syncBusy = false;
+  }
+}
+
+function _tickSyncAge() {
+  if (_syncBusy || !_lastSyncTs) return;
+  const s = Math.round((Date.now() - _lastSyncTs) / 1000);
+  setSyncStatus('ok', s < 8 ? 'sincronizado' : 'sync hace ' + s + 's');
 }
 
 // ─── INIT ────────────────────────────────────────────────────
@@ -1054,6 +1086,9 @@ async function init() {
   loadReuEditsFromSheets();
   renderReus();
   renderRanking();
+  // Auto-sync cada 30 s
+  setInterval(autoSync, 30000);
+  setInterval(_tickSyncAge, 10000);
 }
 
 async function loadData() {
