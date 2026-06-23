@@ -211,6 +211,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .ms-opt:hover{background:var(--s3);}
 .ms-opt input[type=checkbox]{accent-color:var(--blue);width:13px;height:13px;cursor:pointer;flex-shrink:0;}
 .ms-sep{height:1px;background:var(--border);margin:3px 0;}
+/* SEARCH */
+.srch-wrap{position:relative;display:inline-flex;align-items:center;}
+.srch-ico{position:absolute;left:8px;font-size:11px;color:var(--muted);pointer-events:none;}
+.srch{background:var(--s2);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:5px 10px 5px 26px;font-size:12px;font-family:'DM Sans',sans-serif;width:170px;outline:none;transition:border-color .15s,width .2s;}
+.srch:focus{border-color:var(--green);width:220px;}
+.srch::placeholder{color:var(--muted2);}
 </style>
 </head>
 <body>
@@ -276,6 +282,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <option value="bdev">BDEV</option>
       <option value="inbound">Inbound</option>
     </select>
+    <div class="srch-wrap"><span class="srch-ico">🔍</span><input class="srch" id="dash-search" placeholder="empresa, canal, SDR..." oninput="dashSearchQ=this.value.trim();renderDash()"></div>
     <button class="btn-sm" onclick="loadData()">↻ Actualizar</button>
     <button class="btn-sm" onclick="exportReporte('week')" style="color:var(--green);border-color:var(--green-border);">Reporte semana</button>
     <button class="btn-sm" onclick="exportReporte('month')" style="color:var(--blue);border-color:#1E3A5F;">Reporte mes</button>
@@ -429,6 +436,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <label class="ms-opt"><input type="checkbox" value="TODAVIA" onchange="msChange(this)"> Todavía</label>
       </div>
     </div>
+    <div class="srch-wrap"><span class="srch-ico">🔍</span><input class="srch" id="reus-search" placeholder="empresa, SDR, canal, país..." oninput="reusSearchQ=this.value.trim();renderReus()"></div>
     </div>
     <button class="btn-primary" onclick="showAddReu()" style="font-size:12px;padding:8px 16px;">+ Nueva reunión</button>
     <button onclick="syncReusManual()" id="sync-reus-btn" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">↻ Sincronizar</button>
@@ -490,6 +498,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <option value="mes5">Mes 5</option>
       <option value="mes6">Mes 6</option>
     </select>
+    <div class="srch-wrap"><span class="srch-ico">🔍</span><input class="srch" id="rank-search" placeholder="Buscar SDR..." oninput="rankSearchQ=this.value.trim();renderRanking()"></div>
   </div>
   <div class="stitle" id="rank-title">🏆 Ranking — reuniones agendadas</div>
   <div class="rank-cards" id="rank-cards"></div>
@@ -528,6 +537,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
             <label class="ms-opt"><input type="checkbox" value="Global" onchange="msChange(this)"> Global</label>
           </div>
         </div>
+        <div class="srch-wrap"><span class="srch-ico">🔍</span><input class="srch" id="camps-search" placeholder="campaña, SDR, país..." oninput="campsSearchQ=this.value.trim();renderCamps()"></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <button class="btn-sm" onclick="prevCampMonth()" style="padding:4px 10px;font-size:14px;">‹</button>
@@ -636,6 +646,10 @@ let sdrCanalChartInst = null;
 let reuSdrChartInst = null;
 let obibChartInst = null;
 let bdevChartInst = null;
+let reusSearchQ = '';
+let campsSearchQ = '';
+let dashSearchQ = '';
+let rankSearchQ = '';
 
 // ─── REUNIONES DATA (hardcoded from PDF) ─────────────────────
 const REUNIONES_DATA = [
@@ -1177,7 +1191,9 @@ function renderDash() {
   const vistaF = (document.getElementById('d-vista')||{value:'all'}).value;
   const recs  = filtered(sdrF, paisF, perF);
   const t     = agg(recs);
-  const reus  = applyVista(filterReus(sdrF, paisF, perF), vistaF);
+  let reus  = applyVista(filterReus(sdrF, paisF, perF), vistaF);
+  const dq = dashSearchQ.toLowerCase();
+  if (dq) reus = reus.filter(r => (r.empresa||'').toLowerCase().includes(dq)||(r.sdr||'').toLowerCase().includes(dq)||(r.canal||'').toLowerCase().includes(dq)||(r.pais||'').toLowerCase().includes(dq)||(r.estado||'').toLowerCase().includes(dq));
 
   const realizadas = reus.filter(r=>r.realizada==='SI').length;
   const conCot     = reus.filter(r=>r.cotizacion==='SI').length;
@@ -1827,7 +1843,7 @@ function filteredReus() {
   const mesF  = getMsVal('re-mes');
   const estF  = getMsVal('re-estado');
   const realF = getMsVal('re-realizada');
-  return getAllReus().filter(r => {
+  const _base = getAllReus().filter(r => {
     if (!sdrF.includes('all') && !sdrF.includes(r.sdr)) return false;
     if (!paisF.includes('all') && !paisF.includes(r.pais)) return false;
     if (!mesF.includes('all') && !mesF.includes(String(r.mes))) return false;
@@ -1843,6 +1859,15 @@ function filteredReus() {
     if (!realF.includes('all') && !realF.includes(r.realizada)) return false;
     return true;
   });
+  const q = reusSearchQ.toLowerCase();
+  if (!q) return _base;
+  return _base.filter(r =>
+    (r.empresa||'').toLowerCase().includes(q) ||
+    (r.sdr||'').toLowerCase().includes(q) ||
+    (r.canal||'').toLowerCase().includes(q) ||
+    (r.pais||'').toLowerCase().includes(q) ||
+    (r.estado||'').toLowerCase().includes(q)
+  );
 }
 
 function renderReus() {
@@ -1966,7 +1991,8 @@ function renderRanking() {
   const titleEl = document.getElementById('rank-title');
   if (titleEl) titleEl.textContent = '🏆 Ranking — ' + label;
 
-  const stats = ['Leandro','Grace','Carmen','Luziana'].map(sdr => {
+  const rq = rankSearchQ.toLowerCase();
+  const stats = ['Leandro','Grace','Carmen','Luziana'].filter(sdr => !rq || sdr.toLowerCase().includes(rq)).map(sdr => {
     const sdrReus   = reus.filter(r => r.sdr===sdr);
     const total     = sdrReus.length;
     const realizadas= sdrReus.filter(r => r.realizada==='SI').length;
@@ -2921,9 +2947,11 @@ function saveDayField(campId, day, value, y, m) {
 function renderCampCards() {
   const sdrF  = getMsVal('c-sdr');
   const paisF = getMsVal('c-pais');
+  const cq    = campsSearchQ.toLowerCase();
   const recs  = campsData.filter(c=>{
     if(!sdrF.includes('all')&&!sdrF.includes(c.sdr)) return false;
     if(!paisF.includes('all')&&!paisF.includes(c.pais)) return false;
+    if(cq&&!((c.nombre||'').toLowerCase().includes(cq)||(c.sdr||'').toLowerCase().includes(cq)||(c.pais||'').toLowerCase().includes(cq)||(c.id||'').toLowerCase().includes(cq))) return false;
     return true;
   });
   const daily = loadDailyData(campViewYear, campViewMonth);
@@ -2940,9 +2968,11 @@ function renderCampCards() {
 function renderCamps() {
   const sdrF  = getMsVal('c-sdr');
   const paisF = getMsVal('c-pais');
+  const cq    = campsSearchQ.toLowerCase();
   const recs  = campsData.filter(c=>{
     if(!sdrF.includes('all')&&!sdrF.includes(c.sdr)) return false;
     if(!paisF.includes('all')&&!paisF.includes(c.pais)) return false;
+    if(cq&&!((c.nombre||'').toLowerCase().includes(cq)||(c.sdr||'').toLowerCase().includes(cq)||(c.pais||'').toLowerCase().includes(cq)||(c.id||'').toLowerCase().includes(cq))) return false;
     return true;
   });
 
