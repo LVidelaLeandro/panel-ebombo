@@ -3,10 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<script>try{var _V='v24',_u=new URL(location.href);if(_u.searchParams.get('_v')!==_V){_u.searchParams.set('_v',_V);location.replace(_u.toString());}}catch(e){}</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/panel-ebombo/sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      sw.addEventListener('statechange', () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          document.getElementById('sw-update-banner').style.display = 'flex';
+        }
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+}
+</script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -3217,6 +3228,11 @@ init();
       <button class="btn-sm" onclick="closeEmailModal()">Cerrar</button>
     </div>
   </div>
+</div>
+
+<div id="sw-update-banner" style="display:none;position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:#0F172A;border:1px solid #34D399;border-radius:10px;padding:.6rem 1.2rem;gap:.75rem;align-items:center;z-index:9999;font-size:13px;box-shadow:0 4px 20px #00000080;">
+  <span>Nueva versión disponible</span>
+  <button onclick="navigator.serviceWorker.controller.postMessage('skipWaiting')" style="background:#34D399;color:#030712;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600;font-size:12px;">Actualizar</button>
 </div>
 </body>
 </html>
