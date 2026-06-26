@@ -1056,6 +1056,11 @@ async function apiPost(body) {
 // ─── AUTO-SYNC ───────────────────────────────────────────────
 let _syncBusy   = false;
 let _lastSyncTs = null;
+let _pendingSync = null;
+function scheduleSync(delay=3000) {
+  if (_pendingSync) clearTimeout(_pendingSync);
+  _pendingSync = setTimeout(() => { _pendingSync = null; autoSync(); }, delay);
+}
 
 async function autoSync() {
   if (_syncBusy) return;
@@ -1098,7 +1103,7 @@ async function init() {
   renderReus();
   renderRanking();
   // Auto-sync cada 30 s
-  setInterval(autoSync, 30000);
+  setInterval(autoSync, 10000);
   setInterval(_tickSyncAge, 10000);
 }
 
@@ -2781,6 +2786,7 @@ function addReu() {
   document.getElementById('nr-empresa').value='';
   document.getElementById('nr-monto').value=0;
   renderReus();
+  scheduleSync();
 }
 
 function editReu(key, field, val) {
@@ -2801,6 +2807,7 @@ function editReu(key, field, val) {
     apiPost({action:'saveReuEdit', key, data: reuEdits[key]});
   }
   renderReus();
+  scheduleSync();
 }
 
 function editReuAt(i, field, val) {
@@ -2816,16 +2823,20 @@ function deleteReu(key) {
   if (!confirm('¿Eliminar esta reunión?')) return;
   const idx = reusExtras.findIndex(x => x._id === key);
   if (idx !== -1) {
+    const rToDelete = {...reusExtras[idx], _deleted: true};
     reusExtras.splice(idx, 1);
     localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
     reusDeleted.add(key);
     localStorage.setItem('ebombo_reus_deleted', JSON.stringify([...reusDeleted]));
+    apiPost({action:'addReu', reu: rToDelete});
   } else {
     if (!reuEdits[key]) reuEdits[key] = {};
     reuEdits[key]._deleted = true;
     localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
+    apiPost({action:'saveReuEdit', key, data: reuEdits[key]});
   }
   renderReus();
+  scheduleSync();
 }
 
 // ─── CAMPAÑAS ────────────────────────────────────────────────
@@ -2845,22 +2856,15 @@ function loadReusFromSheets(onDone) {
       if (onDone) onDone(null, 'Sin respuesta del servidor');
       return;
     }
-    const existingIds = new Set(reusExtras.map(r => r._id));
-    let added = 0;
-    data.reus.forEach(r => {
-      if (!r._id || reusDeleted.has(r._id)) return;
-      if (!existingIds.has(r._id)) {
-        reusExtras.push(r);
-        added++;
-      } else {
-        const idx = reusExtras.findIndex(x => x._id === r._id);
-        if (idx !== -1) Object.assign(reusExtras[idx], r);
-      }
-    });
-    if (added > 0) {
-      localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-      renderReus();
-    }
+    // Items locales aún no confirmados por el servidor (recién agregados)
+    const serverIds = new Set(data.reus.map(r => r._id).filter(Boolean));
+    const pendingLocal = reusExtras.filter(r => r._id && !serverIds.has(r._id) && !reusDeleted.has(r._id));
+    // El servidor siempre gana: reconstruir desde servidor, filtrar eliminados
+    reusExtras = data.reus.filter(r => r._id && !r._deleted && !reusDeleted.has(r._id));
+    // Mantener items locales pendientes de confirmación del servidor
+    reusExtras = reusExtras.concat(pendingLocal);
+    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
+    renderReus();
     if (onDone) onDone(data.reus.length, null);
   });
 }
@@ -2909,7 +2913,7 @@ function loadReuEditsFromSheets() {
       if (!reuEdits[key]) { reuEdits[key] = edits; changed = true; }
       else {
         Object.entries(edits).forEach(([f, v]) => {
-          if (reuEdits[key][f] === undefined) { reuEdits[key][f] = v; changed = true; }
+          if (reuEdits[key][f] !== v) { reuEdits[key][f] = v; changed = true; }
         });
       }
     });
