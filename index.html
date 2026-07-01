@@ -18,6 +18,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
 }
 </script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -636,6 +638,23 @@ document.addEventListener('click', e => {
 // ─── CONFIG ───────────────────────────────────────────────────
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyZrKTeS4W3kFhpe0JdKYfpUuQuQYKA-Ppz0-4naLhpRExH4pYTe_ECDMRfLucNwWxxpw/exec';
 
+// ─── FIREBASE ────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "REEMPLAZAR",
+  authDomain: "REEMPLAZAR",
+  databaseURL: "REEMPLAZAR",
+  projectId: "REEMPLAZAR",
+  storageBucket: "REEMPLAZAR",
+  messagingSenderId: "REEMPLAZAR",
+  appId: "REEMPLAZAR"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+function fbKey(s) {
+  return String(s).replace(/[.#$\[\]\/]/g, '_').replace(/\s+/g, '_');
+}
+
 const SDRS = [
   {id:'leandro',  label:'Leandro',  role:'SDR',        color:'#60A5FA', avatar:'LE'},
   {id:'grace',    label:'Grace',    role:'Senior SDR', color:'#34D399', avatar:'GR'},
@@ -1060,27 +1079,17 @@ async function apiPost(body) {
   }
 }
 
-// ─── AUTO-SYNC ───────────────────────────────────────────────
+// ─── AUTO-SYNC (solo dashboard records desde Sheets) ─────────
 let _syncBusy   = false;
 let _lastSyncTs = null;
-let _pendingSync = null;
-function scheduleSync(delay=3000) {
-  if (_pendingSync) clearTimeout(_pendingSync);
-  _pendingSync = setTimeout(() => { _pendingSync = null; autoSync(); }, delay);
-}
 
 async function autoSync() {
   if (_syncBusy) return;
-  // No interrumpir al usuario si está editando un campo
   const ae = document.activeElement;
   if (ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.isContentEditable)) return;
   _syncBusy = true;
-  setSyncStatus('spin', 'actualizando...');
   try {
     await loadData();
-    loadReusFromSheets();
-    loadReuEditsFromSheets();
-    loadCampDailyFromSheets();
     _lastSyncTs = Date.now();
   } catch(e) {
     setSyncStatus('off', 'sin conexión');
@@ -1102,15 +1111,11 @@ async function init() {
   setSyncStatus('spin','conectando...');
   buildMiPanel();
   populateDashPeriod();
+  setupFirebaseListeners();
+  await seedFirebaseIfNeeded();
   await loadData();
-  loadCampDailyFromSheets();
-  loadReusFromSheets();
-  loadCampsFromSheets();
-  loadReuEditsFromSheets();
-  renderReus();
   renderRanking();
-  // Auto-sync cada 30 s
-  setInterval(autoSync, 10000);
+  setInterval(autoSync, 30000);
   setInterval(_tickSyncAge, 10000);
 }
 
@@ -1654,16 +1659,7 @@ const DEFAULT_IB  = {leads_form:0,leads_ig:0,contacted:0,meetings:0,recip:0,pipe
 
 function getMiData(sdr, period) {
   const k = sdr+'_'+period;
-  if (!miData[k]) {
-    try {
-      const o = localStorage.getItem('mi_out_'+k);
-      const i = localStorage.getItem('mi_ib_'+k);
-      miData[k] = {
-        out: o ? {...DEFAULT_OUT,...JSON.parse(o)} : {...DEFAULT_OUT},
-        ib:  i ? {...DEFAULT_IB,...JSON.parse(i)}  : {...DEFAULT_IB},
-      };
-    } catch { miData[k]={out:{...DEFAULT_OUT},ib:{...DEFAULT_IB}}; }
-  }
+  if (!miData[k]) miData[k] = {out:{...DEFAULT_OUT}, ib:{...DEFAULT_IB}};
   return miData[k];
 }
 
@@ -1685,15 +1681,12 @@ function setMiIb(updates) {
 function saveMiPanel() {
   const k = miSdr+'_'+miPeriod;
   const d = getMiData(miSdr, miPeriod);
-  localStorage.setItem('mi_out_'+k, JSON.stringify(d.out));
-  localStorage.setItem('mi_ib_'+k,  JSON.stringify(d.ib));
-  // También guardar en Sheets para compartir
-  apiPost({action:'saveMi', sdr:miSdr, period:miPeriod, out:d.out, ib:d.ib});
+  db.ref('miPanel').child(fbKey(k)).set({out: d.out, ib: d.ib});
   const btn = document.getElementById('mi-save-btn');
   const orig = btn.textContent;
   btn.textContent = '✓ Guardado';
   btn.style.color = 'var(--green)';
-  setTimeout(()=>{btn.textContent=orig;},2000);
+  setTimeout(()=>{btn.textContent=orig; btn.style.color='';},2000);
 }
 
 function buildMiPanel() {
@@ -2720,17 +2713,8 @@ function go(t) {
 
 
 
-// ─── REUNIONES EXTRAS + EDITS ────────────────────────────────
-let reusExtras = [];
-try { reusExtras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]'); } catch(e) {}
-
-// IDs eliminados localmente (para no re-agregar desde Sheets)
-let reusDeleted = new Set();
-try { reusDeleted = new Set(JSON.parse(localStorage.getItem('ebombo_reus_deleted')||'[]')); } catch(e) {}
-
-// Overrides para entradas de REUNIONES_DATA (clave = mes__semana__sdr__empresa)
-let reuEdits = {};
-try { reuEdits = JSON.parse(localStorage.getItem('ebombo_reus_edits')||'{}'); } catch(e) {}
+// ─── REUNIONES (Firebase source of truth) ────────────────────
+let fbReus = {}; // {fbKey: reuObject} — actualizado en tiempo real
 
 const CANAL_COLORS = {
   'REPLY':       '#60A5FA',
@@ -2746,16 +2730,11 @@ const CANAL_COLORS = {
 };
 
 function getReuKey(r) {
-  return r._id || [r.mes, r.semana, r.sdr, r.empresa].join('__');
+  return r._id || fbKey([r.mes, r.semana, r.sdr, r.empresa].join('__'));
 }
 
 function getAllReus() {
-  // Aplica overrides sobre REUNIONES_DATA
-  const base = REUNIONES_DATA.map(r => {
-    const key = getReuKey(r);
-    return reuEdits[key] ? {...r, ...reuEdits[key]} : r;
-  }).filter(r => !r._deleted);
-  return base.concat(reusExtras);
+  return Object.values(fbReus).filter(r => !r._deleted);
 }
 
 function showAddReu() {
@@ -2771,7 +2750,6 @@ function showAddReu() {
 }
 
 function addReu() {
-  const now = new Date();
   const r = {
     mes:       parseInt(document.getElementById('nr-mes').value),
     semana:    parseInt(document.getElementById('nr-semana').value),
@@ -2786,35 +2764,17 @@ function addReu() {
     _id:       'reu_'+Date.now(),
   };
   if (!r.empresa) { alert('Ingresá el nombre de la empresa'); return; }
-  reusExtras.push(r);
-  localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-  apiPost({action:'addReu', reu:r});
+  db.ref('reus').child(r._id).set(r);
   document.getElementById('reu-form').style.display='none';
   document.getElementById('nr-empresa').value='';
   document.getElementById('nr-monto').value=0;
-  renderReus();
-  scheduleSync();
 }
 
 function editReu(key, field, val) {
   const v = field === 'monto' ? (parseInt((val||'').replace(/[^0-9]/g,''))||0)
           : (field === 'mes' || field === 'semana') ? parseInt(val)
           : val;
-  // Primero intenta en reusExtras (tiene _id)
-  const extra = reusExtras.find(x => x._id === key);
-  if (extra) {
-    extra[field] = v;
-    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-    apiPost({action:'addReu', reu:extra});
-  } else {
-    // Override sobre REUNIONES_DATA
-    if (!reuEdits[key]) reuEdits[key] = {};
-    reuEdits[key][field] = v;
-    localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
-    apiPost({action:'saveReuEdit', key, data: reuEdits[key]});
-  }
-  renderReus();
-  scheduleSync();
+  db.ref('reus').child(fbKey(key)).update({[field]: v});
 }
 
 function editReuAt(i, field, val) {
@@ -2828,122 +2788,21 @@ function deleteReuAt(i) {
 
 function deleteReu(key) {
   if (!confirm('¿Eliminar esta reunión?')) return;
-  const idx = reusExtras.findIndex(x => x._id === key);
-  if (idx !== -1) {
-    const rToDelete = {...reusExtras[idx], _deleted: true};
-    reusExtras.splice(idx, 1);
-    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-    reusDeleted.add(key);
-    localStorage.setItem('ebombo_reus_deleted', JSON.stringify([...reusDeleted]));
-    apiPost({action:'addReu', reu: rToDelete});
-  } else {
-    if (!reuEdits[key]) reuEdits[key] = {};
-    reuEdits[key]._deleted = true;
-    localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
-    apiPost({action:'saveReuEdit', key, data: reuEdits[key]});
-  }
-  renderReus();
-  scheduleSync();
+  db.ref('reus').child(fbKey(key)).update({_deleted: true});
 }
 
 // ─── CAMPAÑAS ────────────────────────────────────────────────
 let campViewYear = new Date().getFullYear();
 let campViewMonth = new Date().getMonth() + 1;
 
-function getDailyKey(y, m) { return `ebombo_camps_daily_${y}_${String(m).padStart(2,'0')}`; }
-function loadDailyData(y, m) { try { return JSON.parse(localStorage.getItem(getDailyKey(y,m))||'{}'); } catch(e) { return {}; } }
-function saveDailyDataLocal(y, m, data) { localStorage.setItem(getDailyKey(y,m), JSON.stringify(data)); }
-function saveDailyData(y, m, data) {
-  saveDailyDataLocal(y, m, data);
-  apiPost({ action: 'saveCampDaily', year: y, month: m, data: data });
-}
-function loadReusFromSheets(onDone) {
-  apiFetch('getReus').then(data => {
-    if (!data || !Array.isArray(data.reus)) {
-      if (onDone) onDone(null, 'Sin respuesta del servidor');
-      return;
-    }
-    // Items locales aún no confirmados por el servidor (recién agregados)
-    const serverIds = new Set(data.reus.map(r => r._id).filter(Boolean));
-    const pendingLocal = reusExtras.filter(r => r._id && !serverIds.has(r._id) && !reusDeleted.has(r._id));
-    // El servidor siempre gana: reconstruir desde servidor, filtrar eliminados
-    reusExtras = data.reus.filter(r => r._id && !r._deleted && !reusDeleted.has(r._id));
-    // Mantener items locales pendientes de confirmación del servidor
-    reusExtras = reusExtras.concat(pendingLocal);
-    localStorage.setItem('ebombo_reus_extra', JSON.stringify(reusExtras));
-    renderReus();
-    if (onDone) onDone(data.reus.length, null);
-  });
-}
-
+let _campDailyCache = {}; // {y_m: {campId: {day: value}}}
+function loadDailyData(y, m) { return _campDailyCache[y+'_'+m] || {}; }
 function syncReusManual() {
   const btn = document.getElementById('sync-reus-btn');
   const status = document.getElementById('sync-reus-status');
-  btn.disabled = true;
-  btn.textContent = '↻ Sincronizando...';
-  status.textContent = '';
-  loadReusFromSheets((total, err) => {
-    btn.disabled = false;
-    btn.textContent = '↻ Sincronizar';
-    if (err) {
-      status.style.color = '#EF4444';
-      status.textContent = '✗ ' + err;
-    } else {
-      status.style.color = '#22a86e';
-      status.textContent = `✓ ${total} reuniones desde Sheets`;
-    }
-  });
-}
-
-function loadCampsFromSheets() {
-  apiFetch('getCamps').then(data => {
-    if (!data || !Array.isArray(data.camps)) return;
-    const existingIds = new Set(campsData.map(c => c.id));
-    let changed = false;
-    data.camps.forEach(c => {
-      if (!c.id || existingIds.has(c.id)) return;
-      campsData.push(c);
-      changed = true;
-    });
-    if (changed) {
-      localStorage.setItem('ebombo_camps_extra', JSON.stringify(campsData.filter(x=>x.id.startsWith('custom_'))));
-      renderCamps();
-    }
-  });
-}
-
-function loadReuEditsFromSheets() {
-  apiFetch('getReuEdits').then(data => {
-    if (!data || !data.edits) return;
-    let changed = false;
-    Object.entries(data.edits).forEach(([key, edits]) => {
-      if (!reuEdits[key]) { reuEdits[key] = edits; changed = true; }
-      else {
-        Object.entries(edits).forEach(([f, v]) => {
-          if (reuEdits[key][f] !== v) { reuEdits[key][f] = v; changed = true; }
-        });
-      }
-    });
-    if (changed) {
-      localStorage.setItem('ebombo_reus_edits', JSON.stringify(reuEdits));
-      renderReus();
-    }
-  });
-}
-
-function loadCampDailyFromSheets() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
-  const months = m === 1 ? [[y-1,12],[y,m]] : [[y,m-1],[y,m]];
-  months.forEach(([year, month]) => {
-    apiFetch('getCampDaily&year='+year+'&month='+month).then(res => {
-      if (res && res.ok && res.data && Object.keys(res.data).length) {
-        saveDailyDataLocal(year, month, res.data);
-        renderCamps();
-      }
-    });
-  });
+  status.style.color = '#22a86e';
+  status.textContent = '✓ Sincronización en tiempo real activa (Firebase)';
+  setTimeout(() => { status.textContent = ''; }, 3000);
 }
 function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
 
@@ -2954,12 +2813,8 @@ function nextCampMonth() {
   campViewMonth++; if(campViewMonth>12){campViewMonth=1;campViewYear++;} renderCamps();
 }
 
-let campsData = JSON.parse(JSON.stringify([{"id": "ESP_GRACE_012", "sdr": "Grace", "pais": "España", "fecha": "16/3/2026", "nombre": "ESP_GRACE_012_Fiesta Fin de año 2026_Grace", "contactos": 126}, {"id": "ESP_GRACE_006", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_006_Marketing", "contactos": 161}, {"id": "ESP_GRACE_005", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_005_Compras - GENERAL", "contactos": 0}, {"id": "ESP_GRACE_004", "sdr": "Grace", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_Eventos 2026- RRHH.es", "contactos": 174}, {"id": "ESP_GRACE_009", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_009_Catering Corporativo", "contactos": 0}, {"id": "ESP_GRACE_008", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_008_Empresa de decoración de eventos", "contactos": 0}, {"id": "ESP_GRACE_004b", "sdr": "Grace", "pais": "España", "fecha": "21/1/2026", "nombre": "ESP_GRACE_004_ Eventos 2026- RRHH- GRACE", "contactos": 182}, {"id": "ESP_GRACE_003", "sdr": "Grace", "pais": "España", "fecha": "16/1/2026", "nombre": "ESP_GRACE_003_ Aniversarios 2026 - Grace", "contactos": 0}, {"id": "ESP_GRACE_001", "sdr": "Grace", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_GRACE_001_RRHH - Teambuilding", "contactos": 138}, {"id": "MEX_GRACE_002", "sdr": "Grace", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "MEX_GRACE_005", "sdr": "Grace", "pais": "México", "fecha": "17/11/2025", "nombre": "MEX_GRACE_005_Marketing - GENERAL", "contactos": 173}, {"id": "MEX_GRACE_006", "sdr": "Grace", "pais": "México", "fecha": "4/12/2025", "nombre": "MEX_GRACE_006_RRHH - Teambuilding", "contactos": 229}, {"id": "MEX_GRACE_007", "sdr": "Grace", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_GRACE_007_Eventos 2026 - Grace", "contactos": 0}, {"id": "MEX_GRACE_008", "sdr": "Grace", "pais": "México", "fecha": "29/1/2026", "nombre": "MEX_GRACE_008_Día de la mujer - Grace", "contactos": 0}, {"id": "MEX_GRACE_010", "sdr": "Grace", "pais": "México", "fecha": "3/3/2026", "nombre": "MEX_GRACE_010_Empresa de decoración de eventos", "contactos": 0}, {"id": "MEX_GRACE_011", "sdr": "Grace", "pais": "México", "fecha": "23/3/2026", "nombre": "MEX_GRACE_011_Campaña Fin de año 2026", "contactos": 175}, {"id": "MEX_GRACE_012", "sdr": "Grace", "pais": "México", "fecha": "22/4/2026", "nombre": "MEX_GRACE_012_Pride", "contactos": 193}, {"id": "PERU_GRACE_002", "sdr": "Grace", "pais": "Perú", "fecha": "26/11/2025", "nombre": "PERU_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "PERU_GRACE_005", "sdr": "Grace", "pais": "Perú", "fecha": "4/12/2025", "nombre": "PERU_GRACE_005_RRHH - Teambuilding", "contactos": 151}, {"id": "PERU_GRACE_007", "sdr": "Grace", "pais": "Perú", "fecha": "2/1/2026", "nombre": "PERU_GRACE_007_Eventos 2026", "contactos": 156}, {"id": "PERU_GRACE_08", "sdr": "Grace", "pais": "Perú", "fecha": "20/1/2026", "nombre": "PERU_GRACE_08_Marketing", "contactos": 0}, {"id": "PERU_GRACE_011", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_011_Fiestas Patrias", "contactos": 0}, {"id": "PERU_GRACE_012", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_012_Campaña Fin de año 2026", "contactos": 0}, {"id": "PER_014", "sdr": "Carmen", "pais": "Perú", "fecha": "10/12/2025", "nombre": "PER_014_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "PER_016", "sdr": "Carmen", "pais": "Perú", "fecha": "4/2/2026", "nombre": "PER_016_Eventos 2026 - CARMI", "contactos": 0}, {"id": "PER_042", "sdr": "Carmen", "pais": "Perú", "fecha": "22/4/2026", "nombre": "PER_042_Fiestas Patrias - CARMI", "contactos": 0}, {"id": "PER_018", "sdr": "Carmen", "pais": "Perú", "fecha": "6/2/2026", "nombre": "PER_018_Marketing- CARMI", "contactos": 0}, {"id": "PER_022", "sdr": "Carmen", "pais": "Perú", "fecha": "20/2/2026", "nombre": "PER_022_Día del Trabajo- CARMI", "contactos": 0}, {"id": "PER_032", "sdr": "Carmen", "pais": "Perú", "fecha": "18/3/2026", "nombre": "PER_032_Día de la Madre - Carmi", "contactos": 0}, {"id": "PERU_039", "sdr": "Carmen", "pais": "Perú", "fecha": "25/3/2026", "nombre": "PERU_039_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_017", "sdr": "Carmen", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_017_Eventos 2026 - CARMI", "contactos": 0}, {"id": "MEX_013", "sdr": "Carmen", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_013_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "MEX_011", "sdr": "Carmen", "pais": "México", "fecha": "27/11/2025", "nombre": "MEX_011_ Refered By - MEX GENERAL - Carmi", "contactos": 0}, {"id": "MEX_006", "sdr": "Carmen", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_006_Compras - CARMI", "contactos": 0}, {"id": "MEX_023", "sdr": "Carmen", "pais": "México", "fecha": "20/2/2026", "nombre": "MEX_023_Día del Trabajo - CARMI", "contactos": 0}, {"id": "MEX_024", "sdr": "Carmen", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_024_Día de la Madre - CARMI", "contactos": 0}, {"id": "MEX_028", "sdr": "Carmen", "pais": "México", "fecha": "9/3/2026", "nombre": "MEX_028_ Día de la Familia_ Carmi", "contactos": 0}, {"id": "MEX_040", "sdr": "Carmen", "pais": "México", "fecha": "21/4/2026", "nombre": "MEX_040_Pride - CARMI", "contactos": 0}, {"id": "MEX_036", "sdr": "Carmen", "pais": "México", "fecha": "20/3/2026", "nombre": "MEX_036_Marketing - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_037", "sdr": "Carmen", "pais": "México", "fecha": "24/3/2026", "nombre": "MEX_037_Campaña Fin de año 2026 - Carmi", "contactos": 0}, {"id": "ESP_015", "sdr": "Carmen", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_015_ Aniversarios 2026 - CARMI", "contactos": 0}, {"id": "ESP_019", "sdr": "Carmen", "pais": "España", "fecha": "10/1/1962", "nombre": "ESP_019_ Eventos 2026 - Carmi", "contactos": 0}, {"id": "ESP_020", "sdr": "Carmen", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_020_ Inicio de Año_RH - Carmi", "contactos": 0}, {"id": "ESP_022", "sdr": "Carmen", "pais": "España", "fecha": "19/2/2026", "nombre": "ESP_022_ MKT_ Carmi", "contactos": 0}, {"id": "ESP_026", "sdr": "Carmen", "pais": "España", "fecha": "6/3/2026", "nombre": "ESP_026_ Día del Trabajo_ Carmi", "contactos": 0}, {"id": "ESP_027", "sdr": "Carmen", "pais": "España", "fecha": "9/3/2026", "nombre": "ESP_027_ Summer Party_ Carmi", "contactos": 0}, {"id": "ESP_030", "sdr": "Carmen", "pais": "España", "fecha": "11/3/2026", "nombre": "ESP_030_ Empresa de decoración de eventos_ Carmi", "contactos": 0}, {"id": "ESP_031", "sdr": "Carmen", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_031_ Catering Corporativo_ Carmi", "contactos": 0}, {"id": "ESP_033", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_033_Fiesta Fin de año 2026_Carmi", "contactos": 0}, {"id": "ESP_034", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_034_RRHH - Teambuilding - Carmi", "contactos": 0}, {"id": "ESP-035", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP-035-Día de la madre- CARMI", "contactos": 0}, {"id": "ESP_038", "sdr": "Carmen", "pais": "España", "fecha": "24/3/2026", "nombre": "ESP_038_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "ESP_051", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_051_Campaña activación mundial Grupal", "contactos": 0}, {"id": "ESP_050", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_050_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "ESP_049", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_049_Día de San Isidro - GRUPAL", "contactos": 0}, {"id": "ESP_048", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_048_Día de Madrid- GRUPAL", "contactos": 0}, {"id": "ESP_047", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_047_Día del padre - GRUPAL", "contactos": 0}, {"id": "ESP_046", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_046_Summer Party - GRUPAL", "contactos": 0}, {"id": "ESP_045", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_045_Día de la Familia - GRUPAL", "contactos": 0}, {"id": "ESP_044", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_044_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "ESP_043", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_043_Catering Corporativo - Grupal", "contactos": 0}, {"id": "ESP_042", "sdr": "Grupal", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_042_Día de la mujer - Grupal", "contactos": 0}, {"id": "ESP_041", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_041_Marketing", "contactos": 0}, {"id": "ESP_040", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_040_Aniversarios 2026", "contactos": 0}, {"id": "ESP_039", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_039_RRHH - Team building", "contactos": 0}, {"id": "ESP_036", "sdr": "Grupal", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_036_Eventos 2026- RRHH-CARMI+GRACE", "contactos": 0}, {"id": "ESP_002", "sdr": "Grupal", "pais": "España", "fecha": "24/10/2025", "nombre": "ESP_002_HUBSPOT Antiguos contactos - Inicio de año", "contactos": 0}, {"id": "GLOB_031", "sdr": "Grupal", "pais": "Global", "fecha": "4/12/2025", "nombre": "GLOB_031_ REVENTA_POLLA_RRHH_CARMI+GRACE", "contactos": 0}, {"id": "GLOB_030", "sdr": "Grupal", "pais": "Global", "fecha": "3/12/2025", "nombre": "GLOB_030_ RECONTACTO_POLLA_RRH_CARMI+GRACE", "contactos": 0}, {"id": "Latam_01", "sdr": "Grupal", "pais": "Global", "fecha": "6/5/2026", "nombre": "Latam_01_Campaña de Eventos virtuales - Grupal", "contactos": 358}, {"id": "MEX_048", "sdr": "Grupal", "pais": "México", "fecha": "20/5/2026", "nombre": "MEX_048_Campaña activación mundial Grupal", "contactos": 172}, {"id": "MEX_047", "sdr": "Grupal", "pais": "México", "fecha": "20/4/2026", "nombre": "MEX_047_Campaña de recontacto Negocios Hubspot - Fin de Año - Grupal", "contactos": 0}, {"id": "MEX_046", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_046_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "MEX_044", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_044_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "MEX_043", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_043_ Día de la Familia - GRUPAL", "contactos": 0}, {"id": "MEX_043b", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_043_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "MEX_042", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_042_Catering Corporativo - Grupal", "contactos": 0}, {"id": "MEX_042b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_042_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_041", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_041_ Año nuevo chino - Carmi + Grace", "contactos": 0}, {"id": "MEX_040b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_040_ Día de la mujer - Carmi + Grace", "contactos": 0}, {"id": "PER_MX_037", "sdr": "Grupal", "pais": "México", "fecha": "5/1/2026", "nombre": "PER + MX_037_ GO LOOTZA_ CARMI + GRACE", "contactos": 0}, {"id": "MEX_035", "sdr": "Grupal", "pais": "México", "fecha": "29/12/2025", "nombre": "MEX_035_ Eventos 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_029", "sdr": "Grupal", "pais": "México", "fecha": "2/12/2025", "nombre": "MEX_029_ CAMPAÑA HUBSPOT_INICIO DE AÑO_RRH_CARMI+GRACE", "contactos": 0}, {"id": "MEX_027", "sdr": "Grupal", "pais": "México", "fecha": "22/10/2025", "nombre": "MEX_027_ CARMI | MKT GENERAL - MEX - NUEVOS CONTACTOS", "contactos": 0}, {"id": "MEX_C", "sdr": "Grupal", "pais": "México", "fecha": "27/10/2025", "nombre": "MEX_C - CAMPAÑA INICIO DE AÑO - RRH", "contactos": 0}, {"id": "MEX_030", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_030_ TRANSPORTES- MKT", "contactos": 0}, {"id": "MEX_031", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_031_ TURISMO-OCIO - MKT", "contactos": 0}, {"id": "MEX_033", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_033_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_002", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_002_ TRANSPORTES CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_003", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_003_ TURISMO-OCIO CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_004", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_004_ Retail Verano / Moda & Lifestyle - MKT", "contactos": 0}, {"id": "PER_005", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_005_ Eventos / Activaciones / Marketing - MKT", "contactos": 0}, {"id": "PER_006", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_006_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_007", "sdr": "Grupal", "pais": "Perú", "fecha": "15/1/2026", "nombre": "PER_007_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "PER_008", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_008_Catering Corporativo - Grupal", "contactos": 0}, {"id": "PER_009", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_009_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "PER_010", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_010_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "PER_012", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_ExpoMina 2026_Grupal", "contactos": 0}, {"id": "PER_012b", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "PER_013", "sdr": "Grupal", "pais": "Perú", "fecha": "20/5/2026", "nombre": "PER_013_Campaña Activación mundial - Grupal", "contactos": 0}, {"id": "ESP_001_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_001_LEANDRO_Compras - GENERAL", "contactos": 0}, {"id": "ESP_002_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_002_Marketing - Leandro", "contactos": 248}, {"id": "ESP_003_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_003_ACTIVIDADES PARA RH_Leandro", "contactos": 0}, {"id": "ESP_004_L", "sdr": "Leandro", "pais": "España", "fecha": "7/2/2026", "nombre": "ESP_004_Eventos 2026- RRHH-Leandro", "contactos": 258}, {"id": "ESP_005_L", "sdr": "Leandro", "pais": "España", "fecha": "22/4/2026", "nombre": "ESP_005_Team Building_Leandro", "contactos": 216}, {"id": "PER_001_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_001_ Marketing General - Leandro", "contactos": 0}, {"id": "PER_002_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_002_Eventos 2026 - Leandro", "contactos": 0}, {"id": "PER_003_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_003_MKT", "contactos": 0}, {"id": "PER_004_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_004_Compras_Leandro", "contactos": 0}, {"id": "Recontacto_L", "sdr": "Leandro", "pais": "Perú", "fecha": "29/4/2026", "nombre": "Recontacto_SinRespuesta_Leandro", "contactos": 105}, {"id": "PER_MEX_001", "sdr": "Leandro", "pais": "Perú/México", "fecha": "29/5/2026", "nombre": "PER_MEX_001_Leandro", "contactos": 120}, {"id": "MEX_001_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_001_ Compras - GENERAL - LEANDRO", "contactos": 210}, {"id": "MEX_002_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_002_ Marketing - GENERAL - Leandro", "contactos": 0}, {"id": "MEX_003_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_003_ Aniversarios 2026 - Leandro", "contactos": 0}, {"id": "MEX_004_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_004_ Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_005_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "MEX_005_ Eventos / Activaciones / Marketing - Leandro", "contactos": 0}, {"id": "MEX_006_L", "sdr": "Leandro", "pais": "México", "fecha": "9/2/2026", "nombre": "MEX_006_Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_009_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_009_Pride - Leandro", "contactos": 0}, {"id": "MEX_008_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_008_ Día del Padre_Leandro", "contactos": 0}, {"id": "RRHH_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "RRHH_Actividades RH_Leandro", "contactos": 0}]));
-// Cargar extras de localStorage
-try {
-  const extra = JSON.parse(localStorage.getItem('ebombo_camps_extra')||'[]');
-  campsData = campsData.concat(extra);
-} catch(e) {}
+const CAMPS_BASE = [{"id": "ESP_GRACE_012", "sdr": "Grace", "pais": "España", "fecha": "16/3/2026", "nombre": "ESP_GRACE_012_Fiesta Fin de año 2026_Grace", "contactos": 126}, {"id": "ESP_GRACE_006", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_006_Marketing", "contactos": 161}, {"id": "ESP_GRACE_005", "sdr": "Grace", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_GRACE_005_Compras - GENERAL", "contactos": 0}, {"id": "ESP_GRACE_004", "sdr": "Grace", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_Eventos 2026- RRHH.es", "contactos": 174}, {"id": "ESP_GRACE_009", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_009_Catering Corporativo", "contactos": 0}, {"id": "ESP_GRACE_008", "sdr": "Grace", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_GRACE_008_Empresa de decoración de eventos", "contactos": 0}, {"id": "ESP_GRACE_004b", "sdr": "Grace", "pais": "España", "fecha": "21/1/2026", "nombre": "ESP_GRACE_004_ Eventos 2026- RRHH- GRACE", "contactos": 182}, {"id": "ESP_GRACE_003", "sdr": "Grace", "pais": "España", "fecha": "16/1/2026", "nombre": "ESP_GRACE_003_ Aniversarios 2026 - Grace", "contactos": 0}, {"id": "ESP_GRACE_001", "sdr": "Grace", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_GRACE_001_RRHH - Teambuilding", "contactos": 138}, {"id": "MEX_GRACE_002", "sdr": "Grace", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "MEX_GRACE_005", "sdr": "Grace", "pais": "México", "fecha": "17/11/2025", "nombre": "MEX_GRACE_005_Marketing - GENERAL", "contactos": 173}, {"id": "MEX_GRACE_006", "sdr": "Grace", "pais": "México", "fecha": "4/12/2025", "nombre": "MEX_GRACE_006_RRHH - Teambuilding", "contactos": 229}, {"id": "MEX_GRACE_007", "sdr": "Grace", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_GRACE_007_Eventos 2026 - Grace", "contactos": 0}, {"id": "MEX_GRACE_008", "sdr": "Grace", "pais": "México", "fecha": "29/1/2026", "nombre": "MEX_GRACE_008_Día de la mujer - Grace", "contactos": 0}, {"id": "MEX_GRACE_010", "sdr": "Grace", "pais": "México", "fecha": "3/3/2026", "nombre": "MEX_GRACE_010_Empresa de decoración de eventos", "contactos": 0}, {"id": "MEX_GRACE_011", "sdr": "Grace", "pais": "México", "fecha": "23/3/2026", "nombre": "MEX_GRACE_011_Campaña Fin de año 2026", "contactos": 175}, {"id": "MEX_GRACE_012", "sdr": "Grace", "pais": "México", "fecha": "22/4/2026", "nombre": "MEX_GRACE_012_Pride", "contactos": 193}, {"id": "PERU_GRACE_002", "sdr": "Grace", "pais": "Perú", "fecha": "26/11/2025", "nombre": "PERU_GRACE_002_Compras - GENERAL", "contactos": 0}, {"id": "PERU_GRACE_005", "sdr": "Grace", "pais": "Perú", "fecha": "4/12/2025", "nombre": "PERU_GRACE_005_RRHH - Teambuilding", "contactos": 151}, {"id": "PERU_GRACE_007", "sdr": "Grace", "pais": "Perú", "fecha": "2/1/2026", "nombre": "PERU_GRACE_007_Eventos 2026", "contactos": 156}, {"id": "PERU_GRACE_08", "sdr": "Grace", "pais": "Perú", "fecha": "20/1/2026", "nombre": "PERU_GRACE_08_Marketing", "contactos": 0}, {"id": "PERU_GRACE_011", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_011_Fiestas Patrias", "contactos": 0}, {"id": "PERU_GRACE_012", "sdr": "Grace", "pais": "Perú", "fecha": "27/4/2026", "nombre": "PERU_GRACE_012_Campaña Fin de año 2026", "contactos": 0}, {"id": "PER_014", "sdr": "Carmen", "pais": "Perú", "fecha": "10/12/2025", "nombre": "PER_014_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "PER_016", "sdr": "Carmen", "pais": "Perú", "fecha": "4/2/2026", "nombre": "PER_016_Eventos 2026 - CARMI", "contactos": 0}, {"id": "PER_042", "sdr": "Carmen", "pais": "Perú", "fecha": "22/4/2026", "nombre": "PER_042_Fiestas Patrias - CARMI", "contactos": 0}, {"id": "PER_018", "sdr": "Carmen", "pais": "Perú", "fecha": "6/2/2026", "nombre": "PER_018_Marketing- CARMI", "contactos": 0}, {"id": "PER_022", "sdr": "Carmen", "pais": "Perú", "fecha": "20/2/2026", "nombre": "PER_022_Día del Trabajo- CARMI", "contactos": 0}, {"id": "PER_032", "sdr": "Carmen", "pais": "Perú", "fecha": "18/3/2026", "nombre": "PER_032_Día de la Madre - Carmi", "contactos": 0}, {"id": "PERU_039", "sdr": "Carmen", "pais": "Perú", "fecha": "25/3/2026", "nombre": "PERU_039_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_017", "sdr": "Carmen", "pais": "México", "fecha": "4/2/2026", "nombre": "MEX_017_Eventos 2026 - CARMI", "contactos": 0}, {"id": "MEX_013", "sdr": "Carmen", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_013_RRHH_Actividades RH_Carmi", "contactos": 0}, {"id": "MEX_011", "sdr": "Carmen", "pais": "México", "fecha": "27/11/2025", "nombre": "MEX_011_ Refered By - MEX GENERAL - Carmi", "contactos": 0}, {"id": "MEX_006", "sdr": "Carmen", "pais": "México", "fecha": "25/11/2025", "nombre": "MEX_006_Compras - CARMI", "contactos": 0}, {"id": "MEX_023", "sdr": "Carmen", "pais": "México", "fecha": "20/2/2026", "nombre": "MEX_023_Día del Trabajo - CARMI", "contactos": 0}, {"id": "MEX_024", "sdr": "Carmen", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_024_Día de la Madre - CARMI", "contactos": 0}, {"id": "MEX_028", "sdr": "Carmen", "pais": "México", "fecha": "9/3/2026", "nombre": "MEX_028_ Día de la Familia_ Carmi", "contactos": 0}, {"id": "MEX_040", "sdr": "Carmen", "pais": "México", "fecha": "21/4/2026", "nombre": "MEX_040_Pride - CARMI", "contactos": 0}, {"id": "MEX_036", "sdr": "Carmen", "pais": "México", "fecha": "20/3/2026", "nombre": "MEX_036_Marketing - GENERAL - Carmi", "contactos": 0}, {"id": "MEX_037", "sdr": "Carmen", "pais": "México", "fecha": "24/3/2026", "nombre": "MEX_037_Campaña Fin de año 2026 - Carmi", "contactos": 0}, {"id": "ESP_015", "sdr": "Carmen", "pais": "España", "fecha": "4/2/2026", "nombre": "ESP_015_ Aniversarios 2026 - CARMI", "contactos": 0}, {"id": "ESP_019", "sdr": "Carmen", "pais": "España", "fecha": "10/1/1962", "nombre": "ESP_019_ Eventos 2026 - Carmi", "contactos": 0}, {"id": "ESP_020", "sdr": "Carmen", "pais": "España", "fecha": "18/2/2026", "nombre": "ESP_020_ Inicio de Año_RH - Carmi", "contactos": 0}, {"id": "ESP_022", "sdr": "Carmen", "pais": "España", "fecha": "19/2/2026", "nombre": "ESP_022_ MKT_ Carmi", "contactos": 0}, {"id": "ESP_026", "sdr": "Carmen", "pais": "España", "fecha": "6/3/2026", "nombre": "ESP_026_ Día del Trabajo_ Carmi", "contactos": 0}, {"id": "ESP_027", "sdr": "Carmen", "pais": "España", "fecha": "9/3/2026", "nombre": "ESP_027_ Summer Party_ Carmi", "contactos": 0}, {"id": "ESP_030", "sdr": "Carmen", "pais": "España", "fecha": "11/3/2026", "nombre": "ESP_030_ Empresa de decoración de eventos_ Carmi", "contactos": 0}, {"id": "ESP_031", "sdr": "Carmen", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_031_ Catering Corporativo_ Carmi", "contactos": 0}, {"id": "ESP_033", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_033_Fiesta Fin de año 2026_Carmi", "contactos": 0}, {"id": "ESP_034", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP_034_RRHH - Teambuilding - Carmi", "contactos": 0}, {"id": "ESP-035", "sdr": "Carmen", "pais": "España", "fecha": "19/3/2026", "nombre": "ESP-035-Día de la madre- CARMI", "contactos": 0}, {"id": "ESP_038", "sdr": "Carmen", "pais": "España", "fecha": "24/3/2026", "nombre": "ESP_038_Compras - GENERAL - Carmi", "contactos": 0}, {"id": "ESP_051", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_051_Campaña activación mundial Grupal", "contactos": 0}, {"id": "ESP_050", "sdr": "Grupal", "pais": "España", "fecha": "17/3/2026", "nombre": "ESP_050_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "ESP_049", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_049_Día de San Isidro - GRUPAL", "contactos": 0}, {"id": "ESP_048", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_048_Día de Madrid- GRUPAL", "contactos": 0}, {"id": "ESP_047", "sdr": "Grupal", "pais": "España", "fecha": "12/3/2026", "nombre": "ESP_047_Día del padre - GRUPAL", "contactos": 0}, {"id": "ESP_046", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_046_Summer Party - GRUPAL", "contactos": 0}, {"id": "ESP_045", "sdr": "Grupal", "pais": "España", "fecha": "25/2/2026", "nombre": "ESP_045_Día de la Familia - GRUPAL", "contactos": 0}, {"id": "ESP_044", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_044_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "ESP_043", "sdr": "Grupal", "pais": "España", "fecha": "16/2/2026", "nombre": "ESP_043_Catering Corporativo - Grupal", "contactos": 0}, {"id": "ESP_042", "sdr": "Grupal", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_042_Día de la mujer - Grupal", "contactos": 0}, {"id": "ESP_041", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_041_Marketing", "contactos": 0}, {"id": "ESP_040", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_040_Aniversarios 2026", "contactos": 0}, {"id": "ESP_039", "sdr": "Grupal", "pais": "España", "fecha": "30/1/2026", "nombre": "ESP_039_RRHH - Team building", "contactos": 0}, {"id": "ESP_036", "sdr": "Grupal", "pais": "España", "fecha": "11/12/2025", "nombre": "ESP_036_Eventos 2026- RRHH-CARMI+GRACE", "contactos": 0}, {"id": "ESP_002", "sdr": "Grupal", "pais": "España", "fecha": "24/10/2025", "nombre": "ESP_002_HUBSPOT Antiguos contactos - Inicio de año", "contactos": 0}, {"id": "GLOB_031", "sdr": "Grupal", "pais": "Global", "fecha": "4/12/2025", "nombre": "GLOB_031_ REVENTA_POLLA_RRHH_CARMI+GRACE", "contactos": 0}, {"id": "GLOB_030", "sdr": "Grupal", "pais": "Global", "fecha": "3/12/2025", "nombre": "GLOB_030_ RECONTACTO_POLLA_RRH_CARMI+GRACE", "contactos": 0}, {"id": "Latam_01", "sdr": "Grupal", "pais": "Global", "fecha": "6/5/2026", "nombre": "Latam_01_Campaña de Eventos virtuales - Grupal", "contactos": 358}, {"id": "MEX_048", "sdr": "Grupal", "pais": "México", "fecha": "20/5/2026", "nombre": "MEX_048_Campaña activación mundial Grupal", "contactos": 172}, {"id": "MEX_047", "sdr": "Grupal", "pais": "México", "fecha": "20/4/2026", "nombre": "MEX_047_Campaña de recontacto Negocios Hubspot - Fin de Año - Grupal", "contactos": 0}, {"id": "MEX_046", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_046_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "MEX_044", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_044_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "MEX_043", "sdr": "Grupal", "pais": "México", "fecha": "23/2/2026", "nombre": "MEX_043_ Día de la Familia - GRUPAL", "contactos": 0}, {"id": "MEX_043b", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_043_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "MEX_042", "sdr": "Grupal", "pais": "México", "fecha": "16/2/2026", "nombre": "MEX_042_Catering Corporativo - Grupal", "contactos": 0}, {"id": "MEX_042b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_042_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_041", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_041_ Año nuevo chino - Carmi + Grace", "contactos": 0}, {"id": "MEX_040b", "sdr": "Grupal", "pais": "México", "fecha": "13/1/2026", "nombre": "MEX_040_ Día de la mujer - Carmi + Grace", "contactos": 0}, {"id": "PER_MX_037", "sdr": "Grupal", "pais": "México", "fecha": "5/1/2026", "nombre": "PER + MX_037_ GO LOOTZA_ CARMI + GRACE", "contactos": 0}, {"id": "MEX_035", "sdr": "Grupal", "pais": "México", "fecha": "29/12/2025", "nombre": "MEX_035_ Eventos 2026 - Carmi + Grace", "contactos": 0}, {"id": "MEX_029", "sdr": "Grupal", "pais": "México", "fecha": "2/12/2025", "nombre": "MEX_029_ CAMPAÑA HUBSPOT_INICIO DE AÑO_RRH_CARMI+GRACE", "contactos": 0}, {"id": "MEX_027", "sdr": "Grupal", "pais": "México", "fecha": "22/10/2025", "nombre": "MEX_027_ CARMI | MKT GENERAL - MEX - NUEVOS CONTACTOS", "contactos": 0}, {"id": "MEX_C", "sdr": "Grupal", "pais": "México", "fecha": "27/10/2025", "nombre": "MEX_C - CAMPAÑA INICIO DE AÑO - RRH", "contactos": 0}, {"id": "MEX_030", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_030_ TRANSPORTES- MKT", "contactos": 0}, {"id": "MEX_031", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_031_ TURISMO-OCIO - MKT", "contactos": 0}, {"id": "MEX_033", "sdr": "Grupal", "pais": "México", "fecha": "10/12/2025", "nombre": "MEX_033_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_002", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_002_ TRANSPORTES CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_003", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_003_ TURISMO-OCIO CAMPAÑA VERANO - MKT", "contactos": 0}, {"id": "PER_004", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_004_ Retail Verano / Moda & Lifestyle - MKT", "contactos": 0}, {"id": "PER_005", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_005_ Eventos / Activaciones / Marketing - MKT", "contactos": 0}, {"id": "PER_006", "sdr": "Grupal", "pais": "Perú", "fecha": "2/12/2025", "nombre": "PER_006_ Inmobiliaria & Vivienda Vacacional - MKT", "contactos": 0}, {"id": "PER_007", "sdr": "Grupal", "pais": "Perú", "fecha": "15/1/2026", "nombre": "PER_007_ Aniversarios 2026 - Carmi + Grace", "contactos": 0}, {"id": "PER_008", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_008_Catering Corporativo - Grupal", "contactos": 0}, {"id": "PER_009", "sdr": "Grupal", "pais": "Perú", "fecha": "16/2/2026", "nombre": "PER_009_Empresa de decoración de eventos - Grupal", "contactos": 0}, {"id": "PER_010", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_010_Día de la Madre - Carmi + Grace", "contactos": 0}, {"id": "PER_012", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_ExpoMina 2026_Grupal", "contactos": 0}, {"id": "PER_012b", "sdr": "Grupal", "pais": "Perú", "fecha": "23/2/2026", "nombre": "PER_012_Campaña Fin de año 2026 - Grupal", "contactos": 0}, {"id": "PER_013", "sdr": "Grupal", "pais": "Perú", "fecha": "20/5/2026", "nombre": "PER_013_Campaña Activación mundial - Grupal", "contactos": 0}, {"id": "ESP_001_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_001_LEANDRO_Compras - GENERAL", "contactos": 0}, {"id": "ESP_002_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_002_Marketing - Leandro", "contactos": 248}, {"id": "ESP_003_L", "sdr": "Leandro", "pais": "España", "fecha": "6/2/2026", "nombre": "ESP_003_ACTIVIDADES PARA RH_Leandro", "contactos": 0}, {"id": "ESP_004_L", "sdr": "Leandro", "pais": "España", "fecha": "7/2/2026", "nombre": "ESP_004_Eventos 2026- RRHH-Leandro", "contactos": 258}, {"id": "ESP_005_L", "sdr": "Leandro", "pais": "España", "fecha": "22/4/2026", "nombre": "ESP_005_Team Building_Leandro", "contactos": 216}, {"id": "PER_001_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_001_ Marketing General - Leandro", "contactos": 0}, {"id": "PER_002_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_002_Eventos 2026 - Leandro", "contactos": 0}, {"id": "PER_003_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_003_MKT", "contactos": 0}, {"id": "PER_004_L", "sdr": "Leandro", "pais": "Perú", "fecha": "7/2/2026", "nombre": "PER_004_Compras_Leandro", "contactos": 0}, {"id": "Recontacto_L", "sdr": "Leandro", "pais": "Perú", "fecha": "29/4/2026", "nombre": "Recontacto_SinRespuesta_Leandro", "contactos": 105}, {"id": "PER_MEX_001", "sdr": "Leandro", "pais": "Perú/México", "fecha": "29/5/2026", "nombre": "PER_MEX_001_Leandro", "contactos": 120}, {"id": "MEX_001_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_001_ Compras - GENERAL - LEANDRO", "contactos": 210}, {"id": "MEX_002_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_002_ Marketing - GENERAL - Leandro", "contactos": 0}, {"id": "MEX_003_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_003_ Aniversarios 2026 - Leandro", "contactos": 0}, {"id": "MEX_004_L", "sdr": "Leandro", "pais": "México", "fecha": "7/2/2026", "nombre": "MEX_004_ Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_005_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "MEX_005_ Eventos / Activaciones / Marketing - Leandro", "contactos": 0}, {"id": "MEX_006_L", "sdr": "Leandro", "pais": "México", "fecha": "9/2/2026", "nombre": "MEX_006_Eventos 2026 - Leandro", "contactos": 0}, {"id": "MEX_009_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_009_Pride - Leandro", "contactos": 0}, {"id": "MEX_008_L", "sdr": "Leandro", "pais": "México", "fecha": "6/5/2026", "nombre": "MEX_008_ Día del Padre_Leandro", "contactos": 0}, {"id": "RRHH_L", "sdr": "Leandro", "pais": "México", "fecha": "8/2/2026", "nombre": "RRHH_Actividades RH_Leandro", "contactos": 0}];
+let campsData = JSON.parse(JSON.stringify(CAMPS_BASE));
 
 function showAddCamp() {
   const f = document.getElementById('c-form');
@@ -2968,36 +2823,36 @@ function showAddCamp() {
 
 function addCamp() {
   const c = {
-    id: 'custom_'+Date.now(),
+    id:     'custom_'+Date.now(),
     sdr:    document.getElementById('nc-sdr').value,
     pais:   document.getElementById('nc-pais').value,
     nombre: document.getElementById('nc-nombre').value,
   };
   if (!c.nombre) { alert('Ingresá el nombre de la campaña'); return; }
-  campsData.push(c);
-  const extras = campsData.filter(x=>x.id.startsWith('custom_'));
-  localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
-  apiPost({action:'addCamp', camp:c});
+  db.ref('camps').child(c.id).set(c);
   document.getElementById('c-form').style.display='none';
   document.getElementById('nc-nombre').value='';
-  renderCamps();
 }
 
 function saveDayField(campId, day, value, y, m) {
-  const data = loadDailyData(y, m);
-  if (!data[campId]) data[campId] = {};
   const v = parseInt((value||'').replace(/[^0-9]/g,'')) || 0;
-  if (v === 0) delete data[campId][day]; else data[campId][day] = v;
-  saveDailyData(y, m, data);
-  // update total cell without full re-render
+  const cacheKey = y+'_'+m;
+  if (!_campDailyCache[cacheKey]) _campDailyCache[cacheKey] = {};
+  if (!_campDailyCache[cacheKey][campId]) _campDailyCache[cacheKey][campId] = {};
+  if (v === 0) {
+    delete _campDailyCache[cacheKey][campId][day];
+    db.ref('campDaily/'+cacheKey+'/'+fbKey(campId)+'/'+day).remove();
+  } else {
+    _campDailyCache[cacheKey][campId][day] = v;
+    db.ref('campDaily/'+cacheKey+'/'+fbKey(campId)+'/'+day).set(v);
+  }
   const totalCell = document.getElementById('camp-total-'+campId);
   if (totalCell) {
-    const cData = data[campId] || {};
+    const cData = _campDailyCache[cacheKey][campId] || {};
     const tot = Object.values(cData).reduce((s,x)=>s+(x||0),0);
     totalCell.textContent = tot || '—';
     totalCell.style.color = tot ? 'var(--blue)' : 'var(--text3)';
   }
-  // update month total card
   renderCampCards();
 }
 
@@ -3095,10 +2950,7 @@ function renderCamps() {
 
 function deleteCamp(id) {
   if (!confirm('¿Eliminar esta campaña?')) return;
-  campsData = campsData.filter(c=>c.id!==id);
-  const extras = campsData.filter(x=>x.id.startsWith('custom_'));
-  localStorage.setItem('ebombo_camps_extra', JSON.stringify(extras));
-  renderCamps();
+  db.ref('camps').child(id).remove();
 }
 
 // ─── DESTINATARIOS DE REPORTE ────────────────────────────────
@@ -3220,6 +3072,119 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') { e.preventDefault(); addEmail(); }
   });
 });
+
+// ─── FIREBASE LISTENERS ──────────────────────────────────────
+function setupFirebaseListeners() {
+  db.ref('reus').on('value', snap => {
+    fbReus = snap.val() || {};
+    renderReus();
+    setSyncStatus('ok', 'sincronizado');
+  }, () => setSyncStatus('off', 'sin conexión'));
+
+  db.ref('camps').on('value', snap => {
+    const extras = Object.values(snap.val() || {});
+    const baseIds = new Set(CAMPS_BASE.map(c => c.id));
+    campsData = JSON.parse(JSON.stringify(CAMPS_BASE)).concat(extras.filter(c => !baseIds.has(c.id)));
+    renderCamps();
+  });
+
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth() + 1;
+  [[y, m], m === 1 ? [y-1, 12] : [y, m-1]].forEach(([yr, mo]) => {
+    db.ref('campDaily/'+yr+'_'+mo).on('value', snap => {
+      _campDailyCache[yr+'_'+mo] = snap.val() || {};
+      renderCamps();
+    });
+  });
+
+  db.ref('miPanel').on('value', snap => {
+    const val = snap.val() || {};
+    Object.entries(val).forEach(([k, d]) => {
+      miData[k] = {
+        out: d.out ? {...DEFAULT_OUT,...d.out} : {...DEFAULT_OUT},
+        ib:  d.ib  ? {...DEFAULT_IB,...d.ib}   : {...DEFAULT_IB},
+      };
+    });
+    if (typeof miSdr !== 'undefined' && miSdr && typeof renderMiOut === 'function') {
+      renderMiOut(); renderMiIb();
+    }
+  });
+}
+
+// ─── FIREBASE SEED (migración única) ─────────────────────────
+async function seedFirebaseIfNeeded() {
+  try {
+    const snap = await db.ref('meta/seeded').once('value');
+    if (snap.val()) return;
+
+    setSyncStatus('spin', 'Migrando datos...');
+    const batch = {};
+
+    const localEdits = {};
+    try { Object.assign(localEdits, JSON.parse(localStorage.getItem('ebombo_reus_edits')||'{}')); } catch(e) {}
+
+    REUNIONES_DATA.forEach(r => {
+      const compositeKey = [r.mes, r.semana, r.sdr, r.empresa].join('__');
+      const key = fbKey(compositeKey);
+      const edits = localEdits[compositeKey] || {};
+      batch[key] = {...r, _id: key, ...edits};
+    });
+
+    try {
+      const extras = JSON.parse(localStorage.getItem('ebombo_reus_extra')||'[]');
+      extras.filter(r => r._id && !r._deleted).forEach(r => { batch[fbKey(r._id)] = r; });
+    } catch(e) {}
+
+    try {
+      const sheetsData = await apiFetch('getReus');
+      if (sheetsData && Array.isArray(sheetsData.reus)) {
+        sheetsData.reus.filter(r => r._id && !r._deleted).forEach(r => {
+          batch[fbKey(r._id)] = {...(batch[fbKey(r._id)]||{}), ...r};
+        });
+      }
+    } catch(e) {}
+
+    if (Object.keys(batch).length) await db.ref('reus').set(batch);
+
+    const miPanelBatch = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const lk = localStorage.key(i);
+      if (lk && lk.startsWith('mi_out_')) {
+        const k = lk.replace('mi_out_', '');
+        try {
+          const out = JSON.parse(localStorage.getItem('mi_out_'+k)||'{}');
+          const ib  = JSON.parse(localStorage.getItem('mi_ib_'+k)||'{}');
+          if (Object.keys(out).length) miPanelBatch[fbKey(k)] = {out, ib};
+        } catch(e) {}
+      }
+    }
+    if (Object.keys(miPanelBatch).length) await db.ref('miPanel').set(miPanelBatch);
+
+    const campDailyBatch = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const lk = localStorage.key(i);
+      if (lk && lk.startsWith('ebombo_camps_daily_')) {
+        const parts = lk.replace('ebombo_camps_daily_', '').split('_');
+        if (parts.length >= 2) {
+          const [yr, mo] = parts;
+          try {
+            const data = JSON.parse(localStorage.getItem(lk)||'{}');
+            if (Object.keys(data).length) {
+              const sanitized = {};
+              Object.entries(data).forEach(([cid, days]) => { sanitized[fbKey(cid)] = days; });
+              campDailyBatch[yr+'_'+parseInt(mo)] = sanitized;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    if (Object.keys(campDailyBatch).length) await db.ref('campDaily').set(campDailyBatch);
+
+    await db.ref('meta/seeded').set(true);
+  } catch(e) {
+    console.error('[seedFirebase]', e);
+  }
+}
 
 // ─── START ───────────────────────────────────────────────────
 init();
