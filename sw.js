@@ -1,4 +1,4 @@
-const CACHE = 'ebombo-cache-v1';
+const CACHE = 'ebombo-cache-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 
