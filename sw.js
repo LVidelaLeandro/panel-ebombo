@@ -1,4 +1,4 @@
-const CACHE = 'ebombo-cache-v2';
+const CACHE = 'ebombo-cache-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -17,7 +17,7 @@ self.addEventListener('message', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then(response => {
         const clone = response.clone();
         caches.open(CACHE).then(cache => cache.put(event.request, clone));
