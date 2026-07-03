@@ -23,6 +23,8 @@ if ('serviceWorker' in navigator) {
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root {
   --bg:#030712; --s1:#0F172A; --s2:#111827; --s3:#1F2937;
@@ -2101,7 +2103,44 @@ function chartToImage(config, width, height) {
   return url;
 }
 
-function exportReporte(period) {
+async function htmlToPdf(htmlStr) {
+  const width = 860;
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${width}px;border:0;`;
+  document.body.appendChild(iframe);
+  await new Promise(resolve => {
+    iframe.onload = resolve;
+    iframe.srcdoc = htmlStr;
+  });
+  await new Promise(r => setTimeout(r, 60));
+  const bodyEl = iframe.contentDocument.body;
+  const fullHeight = bodyEl.scrollHeight;
+  iframe.style.height = fullHeight + 'px';
+  await new Promise(r => setTimeout(r, 30));
+  const canvas = await html2canvas(bodyEl, { width, windowWidth: width, height: fullHeight, windowHeight: fullHeight, scale: 2, backgroundColor: '#ffffff' });
+  document.body.removeChild(iframe);
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF('p', 'pt', 'a4');
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const imgWidth = pageWidth;
+  const imgHeight = canvas.height * imgWidth / canvas.width;
+  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+  let heightLeft = imgHeight;
+  let position = 0;
+  pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+  heightLeft -= pageHeight;
+  while (heightLeft > 0) {
+    position -= pageHeight;
+    pdf.addPage();
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+  }
+  return pdf;
+}
+
+async function exportReporte(period) {
   const now = new Date();
   const curYear = now.getFullYear();
   const curMonth = now.getMonth() + 1;
@@ -2402,7 +2441,7 @@ tr:last-child td{border-bottom:none;}
 .ftr-bye{color:#d4cff0;font-size:13px;line-height:1.7;margin-bottom:1rem;}
 .ftr-sign{color:#a89ede;font-size:11px;border-top:1px solid #4a4498;padding-top:.75rem;}
 .ftr-sign strong{color:#d4cff0;}
-@media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
+@media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.2rem 0 0;}
 .chart-box{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;}
 .chart-box-full{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;margin-top:1.2rem;}
@@ -2410,7 +2449,6 @@ tr:last-child td{border-bottom:none;}
 .chart-box img,.chart-box-full img{max-width:100%;height:auto;display:block;}
 </style>
 </head><body>
-<!--NOPRINT_START--><button class="no-print" onclick="window.print()" style="position:fixed;top:16px;right:16px;z-index:999;background:#3a3596;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25);">🖨️ Guardar como PDF</button><!--NOPRINT_END-->
 <div class="wrapper">
 
 <div class="hdr">
@@ -2697,19 +2735,16 @@ ${period==='month'&&semanasData.length?`<div class="section">
 </div>
 </body></html>`;
 
-  // Siempre descargar
-  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.html`;
-  const a = Object.assign(document.createElement('a'), {
-    href: 'data:text/html;charset=utf-8,' + encodeURIComponent(html),
-    download: fname
-  });
-  a.click();
+  // Generar PDF real (con los gráficos incluidos) y descargarlo
+  const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.pdf`;
+  const pdf = await htmlToPdf(html);
+  pdf.save(fname);
 
-  // También enviar por correo si hay destinatarios configurados
+  // También enviar por correo si hay destinatarios configurados, con el PDF adjunto
   const emails = getReporteEmails();
   if (emails.length) {
-    const emailHtml = html.replace(/<!--NOPRINT_START-->[\s\S]*?<!--NOPRINT_END-->/g, '');
-    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, emailHtml);
+    const pdfBase64 = pdf.output('base64');
+    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, pdfBase64, fname);
   }
 }
 
@@ -3059,7 +3094,7 @@ function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, cur
 </div></body></html>`;
 }
 
-async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, prebuiltHtml) {
+async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, pdfBase64, pdfFilename) {
   const emails = getReporteEmails();
   if (!emails.length) return;
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -3067,13 +3102,16 @@ async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, cu
     ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear}`
     : `${MESES[curMonth-1]} ${curYear}`;
   const subject     = `Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`;
-  const htmlContent = prebuiltHtml || buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
+  const htmlContent = buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST', mode: 'no-cors',
-      body: JSON.stringify({ action: 'sendEmail', recipients: emails, subject, htmlBody: htmlContent })
+      body: JSON.stringify({
+        action: 'sendEmail', recipients: emails, subject, htmlBody: htmlContent,
+        attachmentBase64: pdfBase64, attachmentName: pdfFilename, attachmentType: 'application/pdf'
+      })
     });
-    alert(`✅ Reporte enviado a ${emails.length} destinatario${emails.length > 1 ? 's' : ''}.`);
+    alert(`✅ Reporte enviado a ${emails.length} destinatario${emails.length > 1 ? 's' : ''} con el PDF adjunto.`);
   } catch(err) {
     console.error('Error enviando reporte:', err);
     alert('Error al enviar el reporte por correo.');
