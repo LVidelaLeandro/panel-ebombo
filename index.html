@@ -2086,6 +2086,21 @@ function exportCSV() {
   a.click();
 }
 
+function chartToImage(config, width, height) {
+  const holder = document.createElement('div');
+  holder.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${width}px;height:${height}px;`;
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  holder.appendChild(canvas);
+  document.body.appendChild(holder);
+  config.options = Object.assign({}, config.options || {}, { responsive: false, animation: false });
+  const chart = new Chart(canvas, config);
+  const url = canvas.toDataURL('image/png');
+  chart.destroy();
+  document.body.removeChild(holder);
+  return url;
+}
+
 function exportReporte(period) {
   const now = new Date();
   const curYear = now.getFullYear();
@@ -2305,13 +2320,32 @@ function exportReporte(period) {
   const evInboundReus = eventosReus.filter(r=>r.canal==='INBOUND');
   const bdevPaisMax = Math.max(...bdevByPais.map(p=>p.total),1);
 
-  // Datos serializados para gráficos del reporte
-  const rptSdrBar    = JSON.stringify(['Leandro','Grace','Carmen','Luziana'].map(sdr=>({sdr,n:periodReus.filter(r=>r.sdr===sdr).length,real:periodReus.filter(r=>r.sdr===sdr&&r.realizada==='SI').length})).filter(x=>x.n>0));
-  const rptReplyBar  = JSON.stringify(replySdrReport.map(x=>({sdr:x.sdr,n:x.n})));
-  const rptProspBar  = JSON.stringify(prospBuckets.map(x=>({k:x.k,n:x.total})));
-  const rptSemLine   = JSON.stringify(semanasData.map(s=>({sem:s.sem,total:s.total,real:s.realizadas})));
-  const rptEvSdr     = JSON.stringify(eventosStats.map(s=>({sdr:s.sdr,n:s.reus.length,real:s.real,tod:s.tod,color:s.sColor})));
-  const rptDonut     = JSON.stringify([totRealizadas, totTodavia, Math.max(0,totAgendadas-totRealizadas-totTodavia)]);
+  // Gráficos del reporte renderizados como imágenes estáticas (se ven en el mail y se pueden copiar/capturar)
+  const REPORT_SDR_COLORS = {Leandro:'#3a3596',Grace:'#22a86e',Carmen:'#FB923C',Luziana:'#F472B6'};
+  const REPORT_CANAL_COLORS = {Correo:'#60A5FA',LinkedIn:'#0A66C2',Llamada:'#34D399',WhatsApp:'#25D366',Otro:'#9CA3AF'};
+  const barOptsRpt = axis => ({responsive:false,animation:false,plugins:{legend:{display:false}},scales:{[axis]:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},[(axis==='x'?'y':'x')]:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}});
+
+  const rptSdrBar = ['Leandro','Grace','Carmen','Luziana'].map(sdr=>({sdr,n:periodReus.filter(r=>r.sdr===sdr).length,real:periodReus.filter(r=>r.sdr===sdr&&r.realizada==='SI').length})).filter(x=>x.n>0);
+  const rptReplyBar = replySdrReport.map(x=>({sdr:x.sdr,n:x.n}));
+  const rptProspBar = prospBuckets.map(x=>({k:x.k,n:x.total}));
+  const rptSemLine = semanasData.map(s=>({sem:s.sem,total:s.total,real:s.realizadas}));
+  const rptDonut = [totRealizadas, totTodavia, Math.max(0,totAgendadas-totRealizadas-totTodavia)];
+
+  const imgDonut = chartToImage({type:'doughnut',data:{labels:['Realizadas','Todavía','No realizadas'],datasets:[{data:rptDonut,backgroundColor:['#22a86e','#e6a817','#EF4444'],borderWidth:2,borderColor:'#f8f7ff',hoverOffset:4}]},options:{cutout:'62%',plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},padding:14,color:'#374151'}}}}}, 380, 260);
+
+  const imgSdrBar = rptSdrBar.length ? chartToImage({type:'bar',data:{labels:rptSdrBar.map(x=>x.sdr),datasets:[
+    {label:'Agendadas',data:rptSdrBar.map(x=>x.n),backgroundColor:rptSdrBar.map(x=>(REPORT_SDR_COLORS[x.sdr]||'#9CA3AF')+'33'),borderColor:rptSdrBar.map(x=>REPORT_SDR_COLORS[x.sdr]||'#9CA3AF'),borderWidth:2,borderRadius:5},
+    {label:'Realizadas',data:rptSdrBar.map(x=>x.real),backgroundColor:rptSdrBar.map(x=>(REPORT_SDR_COLORS[x.sdr]||'#9CA3AF')+'88'),borderColor:rptSdrBar.map(x=>REPORT_SDR_COLORS[x.sdr]||'#9CA3AF'),borderWidth:2,borderRadius:5}
+  ]},options:{indexAxis:'y',plugins:{legend:{display:true,position:'top',labels:{font:{size:10},padding:10}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},y:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}}, 380, 260) : null;
+
+  const imgReply = rptReplyBar.length ? chartToImage({type:'bar',data:{labels:rptReplyBar.map(x=>x.sdr),datasets:[{data:rptReplyBar.map(x=>x.n),backgroundColor:rptReplyBar.map(x=>(REPORT_SDR_COLORS[x.sdr]||'#9CA3AF')+'55'),borderColor:rptReplyBar.map(x=>REPORT_SDR_COLORS[x.sdr]||'#9CA3AF'),borderWidth:2,borderRadius:5}]},options:barOptsRpt('x')}, 380, 260) : null;
+
+  const imgProsp = rptProspBar.length ? chartToImage({type:'bar',data:{labels:rptProspBar.map(x=>x.k),datasets:[{data:rptProspBar.map(x=>x.n),backgroundColor:rptProspBar.map(x=>(REPORT_CANAL_COLORS[x.k]||'#9CA3AF')+'55'),borderColor:rptProspBar.map(x=>REPORT_CANAL_COLORS[x.k]||'#9CA3AF'),borderWidth:2,borderRadius:5}]},options:barOptsRpt('x')}, 380, 260) : null;
+
+  const imgSemLine = rptSemLine.length ? chartToImage({type:'line',data:{labels:rptSemLine.map(s=>'Sem '+s.sem),datasets:[
+    {label:'Agendadas',data:rptSemLine.map(s=>s.total),borderColor:'#3a3596',backgroundColor:'#3a359622',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#3a3596',pointBorderColor:'#fff',pointBorderWidth:2},
+    {label:'Realizadas',data:rptSemLine.map(s=>s.real),borderColor:'#22a86e',backgroundColor:'#22a86e22',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#22a86e',pointBorderColor:'#fff',pointBorderWidth:2}
+  ]},options:{plugins:{legend:{display:true,position:'top',labels:{font:{size:11},padding:12,color:'#374151'}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'},grid:{color:'#f0eff8'}},x:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}}, 760, 260) : null;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>Reporte ${period==='week'?'Semanal':'Mensual'} SDR — eBombo ${MONTHS[curMonth-1]} ${curYear}</title>
@@ -2368,14 +2402,15 @@ tr:last-child td{border-bottom:none;}
 .ftr-bye{color:#d4cff0;font-size:13px;line-height:1.7;margin-bottom:1rem;}
 .ftr-sign{color:#a89ede;font-size:11px;border-top:1px solid #4a4498;padding-top:.75rem;}
 .ftr-sign strong{color:#d4cff0;}
-@media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+@media print{body{background:#fff;}.wrapper{box-shadow:none;}.hdr,.ftr,thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin:1.2rem 0 0;}
 .chart-box{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;}
 .chart-box-full{background:#f8f7ff;border:1px solid #ede8f8;border-radius:10px;padding:1rem 1.2rem;margin-top:1.2rem;}
 .chart-box-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;margin-bottom:.75rem;}
+.chart-box img,.chart-box-full img{max-width:100%;height:auto;display:block;}
 </style>
-<!--CHART_START-->\x3cscript src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js">\x3c/script><!--CHART_END-->
 </head><body>
+<!--NOPRINT_START--><button class="no-print" onclick="window.print()" style="position:fixed;top:16px;right:16px;z-index:999;background:#3a3596;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:12px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.25);">🖨️ Guardar como PDF</button><!--NOPRINT_END-->
 <div class="wrapper">
 
 <div class="hdr">
@@ -2405,16 +2440,16 @@ tr:last-child td{border-bottom:none;}
     <div class="card"><div class="card-lbl">HOT</div><div class="card-val w">${totHOT}</div></div>
     <div class="card"><div class="card-lbl">Pipeline USD</div><div class="card-val g">${money(totPipeline)}</div></div>
   </div>
-  <!--CHART_START--><div class="chart-grid">
+  <div class="chart-grid">
     <div class="chart-box">
       <div class="chart-box-title">Estado de reuniones</div>
-      <canvas id="rpt-donut" height="180"></canvas>
+      <img src="${imgDonut}" alt="Estado de reuniones">
     </div>
-    <div class="chart-box">
+    ${imgSdrBar?`<div class="chart-box">
       <div class="chart-box-title">Reuniones por SDR</div>
-      <canvas id="rpt-sdr-bar" height="180"></canvas>
-    </div>
-  </div><!--CHART_END-->
+      <img src="${imgSdrBar}" alt="Reuniones por SDR">
+    </div>`:'<div></div>'}
+  </div>
 </div>
 
 <!-- 2. EVENTOS: GRACE + LEANDRO -->
@@ -2575,10 +2610,10 @@ ${(replySdrReport.length||prospBuckets.length)?`<div class="section">
     <tr class="tr-total"><td>TOTAL PROSP.</td><td>${prospReus.length}</td><td>100%</td><td></td></tr>
     </tbody>
   </table>`:''}
-  <!--CHART_START--><div class="chart-grid" style="margin-top:1.5rem;">
-    ${replySdrReport.length?`<div class="chart-box"><div class="chart-box-title">REPLY por SDR</div><canvas id="rpt-reply-bar" height="200"></canvas></div>`:'<div></div>'}
-    ${prospBuckets.length?`<div class="chart-box"><div class="chart-box-title">Prospección por canal</div><canvas id="rpt-prosp-bar" height="200"></canvas></div>`:'<div></div>'}
-  </div><!--CHART_END-->
+  <div class="chart-grid" style="margin-top:1.5rem;">
+    ${imgReply?`<div class="chart-box"><div class="chart-box-title">REPLY por SDR</div><img src="${imgReply}" alt="REPLY por SDR"></div>`:'<div></div>'}
+    ${imgProsp?`<div class="chart-box"><div class="chart-box-title">Prospección por canal</div><img src="${imgProsp}" alt="Prospección por canal"></div>`:'<div></div>'}
+  </div>
 </div>`:''}
 
 <!-- 4. BILIT — CARMEN -->
@@ -2646,10 +2681,10 @@ ${period==='month'&&semanasData.length?`<div class="section">
     </tbody>
   </table>
   <p style="font-size:10px;color:#9CA3AF;margin-top:4px;">Formato por SDR: agendadas / realizadas</p>
-  <!--CHART_START--><div class="chart-box-full">
+  ${imgSemLine?`<div class="chart-box-full">
     <div class="chart-box-title">Evolución semanal — agendadas vs. realizadas</div>
-    <canvas id="rpt-sem-line" height="140"></canvas>
-  </div><!--CHART_END-->
+    <img src="${imgSemLine}" alt="Evolución semanal">
+  </div>`:''}
 </div>`:''}
 
 </div>
@@ -2660,28 +2695,6 @@ ${period==='month'&&semanasData.length?`<div class="section">
 </div>
 
 </div>
-<!--CHART_START-->\x3cscript>
-(function(){
-  var SDR_COLORS={Leandro:'#3a3596',Grace:'#22a86e',Carmen:'#FB923C',Luziana:'#F472B6'};
-  var CANAL_COLORS={Correo:'#60A5FA',LinkedIn:'#0A66C2',Llamada:'#34D399',WhatsApp:'#25D366',Otro:'#9CA3AF'};
-  var barOpts=function(axis){return{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}},scales:{[axis]:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},[(axis==='x'?'y':'x')]:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}};};
-
-  var donutEl=document.getElementById('rpt-donut');
-  if(donutEl){var d=${rptDonut};new Chart(donutEl,{type:'doughnut',data:{labels:['Realizadas','Todavía','No realizadas'],datasets:[{data:d,backgroundColor:['#22a86e','#e6a817','#EF4444'],borderWidth:2,borderColor:'#f8f7ff',hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:true,cutout:'62%',plugins:{legend:{display:true,position:'bottom',labels:{font:{size:11},padding:14,color:'#374151'}}}}});}
-
-  var sdrEl=document.getElementById('rpt-sdr-bar');
-  if(sdrEl){var sd=${rptSdrBar};if(sd.length){new Chart(sdrEl,{type:'bar',data:{labels:sd.map(function(x){return x.sdr;}),datasets:[{label:'Agendadas',data:sd.map(function(x){return x.n;}),backgroundColor:sd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'33';}),borderColor:sd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5},{label:'Realizadas',data:sd.map(function(x){return x.real;}),backgroundColor:sd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'88';}),borderColor:sd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:{responsive:true,maintainAspectRatio:true,indexAxis:'y',plugins:{legend:{display:true,position:'top',labels:{font:{size:10},padding:10}}},scales:{x:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'}},y:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}});}}
-
-  var replyEl=document.getElementById('rpt-reply-bar');
-  if(replyEl){var rd=${rptReplyBar};if(rd.length){new Chart(replyEl,{type:'bar',data:{labels:rd.map(function(x){return x.sdr;}),datasets:[{data:rd.map(function(x){return x.n;}),backgroundColor:rd.map(function(x){return (SDR_COLORS[x.sdr]||'#9CA3AF')+'55';}),borderColor:rd.map(function(x){return SDR_COLORS[x.sdr]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:barOpts('x')});}}
-
-  var prospEl=document.getElementById('rpt-prosp-bar');
-  if(prospEl){var pd=${rptProspBar};if(pd.length){new Chart(prospEl,{type:'bar',data:{labels:pd.map(function(x){return x.k;}),datasets:[{data:pd.map(function(x){return x.n;}),backgroundColor:pd.map(function(x){return (CANAL_COLORS[x.k]||'#9CA3AF')+'55';}),borderColor:pd.map(function(x){return CANAL_COLORS[x.k]||'#9CA3AF';}),borderWidth:2,borderRadius:5}]},options:barOpts('x')});}}
-
-  var semEl=document.getElementById('rpt-sem-line');
-  if(semEl){var sm=${rptSemLine};if(sm.length){new Chart(semEl,{type:'line',data:{labels:sm.map(function(s){return 'Sem '+s.sem;}),datasets:[{label:'Agendadas',data:sm.map(function(s){return s.total;}),borderColor:'#3a3596',backgroundColor:'#3a359622',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#3a3596',pointBorderColor:'#fff',pointBorderWidth:2},{label:'Realizadas',data:sm.map(function(s){return s.real;}),borderColor:'#22a86e',backgroundColor:'#22a86e22',tension:.35,fill:true,pointRadius:5,pointBackgroundColor:'#22a86e',pointBorderColor:'#fff',pointBorderWidth:2}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:true,position:'top',labels:{font:{size:11},padding:12,color:'#374151'}}},scales:{y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10},color:'#374151'},grid:{color:'#f0eff8'}},x:{ticks:{font:{size:11},color:'#374151'},grid:{color:'#f0eff8'}}}}});}}
-})();
-\x3c/script><!--CHART_END-->
 </body></html>`;
 
   // Siempre descargar
@@ -2695,7 +2708,7 @@ ${period==='month'&&semanasData.length?`<div class="section">
   // También enviar por correo si hay destinatarios configurados
   const emails = getReporteEmails();
   if (emails.length) {
-    const emailHtml = html.replace(/<!--CHART_START-->[\s\S]*?<!--CHART_END-->/g, '');
+    const emailHtml = html.replace(/<!--NOPRINT_START-->[\s\S]*?<!--NOPRINT_END-->/g, '');
     sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, emailHtml);
   }
 }
