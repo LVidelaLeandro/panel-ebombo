@@ -2745,9 +2745,14 @@ ${period==='month'&&semanasData.length?`<div class="section">
   // las imágenes data: embebidas) y el PDF con los gráficos como adjunto.
   const emails = getReporteEmails();
   if (emails.length) {
-    const pdfBase64 = pdf.output('base64');
-    const emailHtml = html.replace(/<img[^>]*>/g, '<p style="font-size:11px;color:#9CA3AF;font-style:italic;margin:.5rem 0;">📊 Ver el gráfico en el PDF adjunto.</p>');
-    sendReporteByEmail(period, curMonth, curYear, curSemana, emailHtml, pdfBase64, fname);
+    try {
+      const pdfBase64 = pdf.output('datauristring').split(',')[1];
+      const emailHtml = html.replace(/<img[^>]*>/g, '<p style="font-size:11px;color:#9CA3AF;font-style:italic;margin:.5rem 0;">📊 Ver el gráfico en el PDF adjunto.</p>');
+      await sendReporteByEmail(period, curMonth, curYear, curSemana, emailHtml, pdfBase64, fname);
+    } catch(err) {
+      console.error('Error preparando el envío del reporte por correo:', err);
+      alert('El PDF se descargó bien, pero hubo un error al preparar el envío por correo: ' + err.message);
+    }
   }
 }
 
