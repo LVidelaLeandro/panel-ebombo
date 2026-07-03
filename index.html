@@ -2740,11 +2740,14 @@ ${period==='month'&&semanasData.length?`<div class="section">
   const pdf = await htmlToPdf(html);
   pdf.save(fname);
 
-  // También enviar por correo si hay destinatarios configurados, con el PDF adjunto
+  // También enviar por correo si hay destinatarios configurados: reporte completo
+  // en el cuerpo (con los gráficos reemplazados por una nota, porque Gmail bloquea
+  // las imágenes data: embebidas) y el PDF con los gráficos como adjunto.
   const emails = getReporteEmails();
   if (emails.length) {
     const pdfBase64 = pdf.output('base64');
-    sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, pdfBase64, fname);
+    const emailHtml = html.replace(/<img[^>]*>/g, '<p style="font-size:11px;color:#9CA3AF;font-style:italic;margin:.5rem 0;">📊 Ver el gráfico en el PDF adjunto.</p>');
+    sendReporteByEmail(period, curMonth, curYear, curSemana, emailHtml, pdfBase64, fname);
   }
 }
 
@@ -3048,53 +3051,7 @@ function removeEmail(idx) {
   saveReporteEmails(list);
   renderEmailList();
 }
-function buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd) {
-  const tAll = agg(actRecs);
-  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const labelPeriod = period === 'week'
-    ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear} (${weekStart} → ${weekEnd})`
-    : `${MESES[curMonth-1]} ${curYear}`;
-  const sdrRows = ['Leandro','Grace','Carmen'].map(sdr => {
-    const s = agg(actRecs.filter(r => r.sdr === sdr));
-    const c = s.contactados ? Math.round(s.reuniones/s.contactados*100) : 0;
-    return `<tr>
-      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;">${sdr}</td>
-      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${s.contactados.toLocaleString()}</td>
-      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${s.reuniones}</td>
-      <td style="padding:9px 14px;border-bottom:1px solid #E5E7EB;text-align:center;">${c}%</td></tr>`;
-  }).join('');
-  return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#F3F4F6;font-family:Arial,sans-serif;">
-<div style="max-width:580px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
-  <div style="background:#111827;padding:22px 28px;">
-    <p style="color:#9CA3AF;font-size:11px;margin:0 0 4px;letter-spacing:.06em;text-transform:uppercase;">eBombo SDR</p>
-    <h1 style="color:#F9FAFB;font-size:20px;margin:0 0 4px;">Reporte ${period==='week'?'Semanal':'Mensual'}</h1>
-    <p style="color:#9CA3AF;font-size:12px;margin:0;">${labelPeriod}</p>
-  </div>
-  <div style="padding:24px 28px;">
-    <table style="width:100%;border-collapse:collapse;margin-bottom:28px;background:#F9FAFB;border-radius:6px;overflow:hidden;">
-      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Contactados</td><td style="padding:10px 14px;text-align:right;font-size:20px;font-weight:700;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.contactados.toLocaleString()}</td></tr>
-      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Respuestas</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.respuestas}</td></tr>
-      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;border-bottom:1px solid #E5E7EB;">Reuniones (actividad)</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;border-bottom:1px solid #E5E7EB;">${tAll.reuniones}</td></tr>
-      <tr><td style="padding:10px 14px;font-size:13px;color:#374151;">Reuniones del período</td><td style="padding:10px 14px;text-align:right;font-weight:600;color:#111827;">${periodReus.length}</td></tr>
-    </table>
-    <h2 style="font-size:14px;font-weight:600;color:#374151;margin:0 0 12px;">Por persona</h2>
-    <table style="width:100%;border-collapse:collapse;">
-      <thead><tr style="background:#111827;">
-        <th style="padding:8px 14px;text-align:left;font-size:11px;color:#9CA3AF;font-weight:500;">SDR</th>
-        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Contactados</th>
-        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Reuniones</th>
-        <th style="padding:8px 14px;text-align:center;font-size:11px;color:#9CA3AF;font-weight:500;">Conv.</th>
-      </tr></thead>
-      <tbody>${sdrRows}</tbody>
-    </table>
-  </div>
-  <div style="padding:12px 28px;background:#F3F4F6;font-size:11px;color:#9CA3AF;text-align:center;">
-    Panel SDR eBombo · ${now.toLocaleDateString('es-ES',{day:'2-digit',month:'long',year:'numeric'})}
-  </div>
-</div></body></html>`;
-}
-
-async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd, pdfBase64, pdfFilename) {
+async function sendReporteByEmail(period, curMonth, curYear, curSemana, emailHtml, pdfBase64, pdfFilename) {
   const emails = getReporteEmails();
   if (!emails.length) return;
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -3102,12 +3059,11 @@ async function sendReporteByEmail(period, actRecs, periodReus, now, curMonth, cu
     ? `Semana ${curSemana} — ${MESES[curMonth-1]} ${curYear}`
     : `${MESES[curMonth-1]} ${curYear}`;
   const subject     = `Reporte ${period==='week'?'Semanal':'Mensual'} eBombo SDR — ${labelPeriod}`;
-  const htmlContent = buildEmailHTML(period, actRecs, periodReus, now, curMonth, curYear, curSemana, weekStart, weekEnd);
   try {
     await fetch(SCRIPT_URL, {
       method: 'POST', mode: 'no-cors',
       body: JSON.stringify({
-        action: 'sendEmail', recipients: emails, subject, htmlBody: htmlContent,
+        action: 'sendEmail', recipients: emails, subject, htmlBody: emailHtml,
         attachmentBase64: pdfBase64, attachmentName: pdfFilename, attachmentType: 'application/pdf'
       })
     });
