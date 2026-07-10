@@ -23,8 +23,8 @@ if ('serviceWorker' in navigator) {
 <title>eBombo — Panel SDR</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root {
   --bg:#030712; --s1:#0F172A; --s2:#111827; --s3:#1F2937;
@@ -2103,41 +2103,420 @@ function chartToImage(config, width, height) {
   return url;
 }
 
-async function htmlToPdf(htmlStr) {
-  const width = 860;
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText = `position:fixed;left:-9999px;top:0;width:${width}px;border:0;`;
-  document.body.appendChild(iframe);
-  await new Promise(resolve => {
-    iframe.onload = resolve;
-    iframe.srcdoc = htmlStr;
-  });
-  await new Promise(r => setTimeout(r, 60));
-  const bodyEl = iframe.contentDocument.body;
-  const fullHeight = bodyEl.scrollHeight;
-  iframe.style.height = fullHeight + 'px';
-  await new Promise(r => setTimeout(r, 30));
-  const canvas = await html2canvas(bodyEl, { width, windowWidth: width, height: fullHeight, windowHeight: fullHeight, scale: 2, backgroundColor: '#ffffff' });
-  document.body.removeChild(iframe);
+// ─── PDF DEL REPORTE (texto real seleccionable, no una captura de pantalla) ──
+const PDF_CLR = {
+  violet: [58,53,150], violetLight:[237,232,248], violetBg:[248,247,255],
+  green:[34,168,110], amber:[230,168,23], red:[204,0,0], gray:[107,114,128],
+  text:[31,31,46], white:[255,255,255],
+};
+const PDF_PAGE_W = 595.28, PDF_PAGE_H = 841.89, PDF_MARGIN = 40;
+const PDF_CONTENT_W = PDF_PAGE_W - PDF_MARGIN*2, PDF_BOTTOM = PDF_PAGE_H - PDF_MARGIN;
+const PDF_PAIS_LABEL = {PERU:'Perú', MEXICO:'México', ESPANA:'España'};
 
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('p', 'pt', 'a4');
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const imgWidth = pageWidth;
-  const imgHeight = canvas.height * imgWidth / canvas.width;
-  const imgData = canvas.toDataURL('image/jpeg', 0.92);
-  let heightLeft = imgHeight;
-  let position = 0;
-  pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-  heightLeft -= pageHeight;
-  while (heightLeft > 0) {
-    position -= pageHeight;
-    pdf.addPage();
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
+function pdfMoney(v) { return v ? '$'+Number(v).toLocaleString('en-US') : '—'; }
+
+// sColor/semBg y otros colores que vienen de los datos son strings hex ('#3a3596');
+// la paleta interna PDF_CLR.* ya son arrays [r,g,b]. Normalizamos ambos a arrays para
+// que doc.setFillColor(...pdfCol(v)) nunca desarme un string en caracteres sueltos.
+function pdfCol(v) {
+  if (Array.isArray(v)) return v;
+  const h = String(v).replace('#','');
+  return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)];
+}
+
+function pdfEnsureSpace(doc, y, needed) {
+  if (y + needed > PDF_BOTTOM) { doc.addPage(); return PDF_MARGIN; }
+  return y;
+}
+
+function pdfSectionHeader(doc, y, num, title) {
+  y = pdfEnsureSpace(doc, y, 34);
+  doc.setFillColor(...PDF_CLR.violet);
+  doc.circle(PDF_MARGIN+8, y+3, 8, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...PDF_CLR.white);
+  doc.text(String(num), PDF_MARGIN+8, y+5.5, {align:'center'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...PDF_CLR.violet);
+  doc.text(title.toUpperCase(), PDF_MARGIN+22, y+5.5);
+  y += 13;
+  doc.setDrawColor(...PDF_CLR.violetLight); doc.setLineWidth(1);
+  doc.line(PDF_MARGIN, y, PDF_MARGIN+PDF_CONTENT_W, y);
+  return y + 16;
+}
+
+function pdfSubLabel(doc, y, text) {
+  y = pdfEnsureSpace(doc, y, 18);
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...PDF_CLR.violet);
+  doc.text(text.toUpperCase(), PDF_MARGIN, y);
+  return y + 13;
+}
+
+function pdfNote(doc, y, text) {
+  y = pdfEnsureSpace(doc, y, 12);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...PDF_CLR.gray);
+  doc.text(text, PDF_MARGIN, y);
+  return y + 12;
+}
+
+function pdfParagraph(doc, y, text, opts = {}) {
+  const size = opts.size || 10;
+  doc.setFont('helvetica', opts.bold ? 'bold':'normal'); doc.setFontSize(size);
+  doc.setTextColor(...(opts.color || PDF_CLR.text));
+  const lines = doc.splitTextToSize(text, opts.width || PDF_CONTENT_W);
+  y = pdfEnsureSpace(doc, y, lines.length*(size*1.3)+4);
+  doc.text(lines, PDF_MARGIN, y);
+  return y + lines.length*(size*1.3) + (opts.gap ?? 4);
+}
+
+function pdfKpiCards(doc, y, cards) {
+  const cardW = 105, cardH = 42, gap = 8;
+  const perRow = Math.max(1, Math.floor((PDF_CONTENT_W+gap)/(cardW+gap)));
+  const rows = Math.ceil(cards.length/perRow);
+  y = pdfEnsureSpace(doc, y, rows*(cardH+gap)+6);
+  cards.forEach((c,i) => {
+    const colI = i % perRow, row = Math.floor(i/perRow);
+    const x = PDF_MARGIN + colI*(cardW+gap), cy = y + row*(cardH+gap);
+    doc.setFillColor(...PDF_CLR.violetBg); doc.setDrawColor(...PDF_CLR.violetLight);
+    doc.roundedRect(x, cy, cardW, cardH, 4, 4, 'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...PDF_CLR.gray);
+    doc.text(c.label.toUpperCase(), x+8, cy+14, {maxWidth:cardW-16});
+    doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.setTextColor(...(c.color||PDF_CLR.violet));
+    doc.text(String(c.value), x+8, cy+33);
+  });
+  return y + rows*(cardH+gap) + 8;
+}
+
+function pdfProgressBar(doc, y, pct, color, width = PDF_CONTENT_W - 20) {
+  doc.setFillColor(...PDF_CLR.violetLight);
+  doc.roundedRect(PDF_MARGIN+14, y, width, 6, 3, 3, 'F');
+  const w = Math.max(0, Math.min(100, pct))/100*width;
+  if (w > 0.5) { doc.setFillColor(...pdfCol(color)); doc.roundedRect(PDF_MARGIN+14, y, w, 6, 3, 3, 'F'); }
+  return y + 12;
+}
+
+// s: {sdr, reus, real, tod, cot, won, pip, pct, semBg, sColor, pe, mx, es}, meta = meta numérica
+function pdfSdrCard(doc, y, s, meta) {
+  const chips = [];
+  ['pe','mx','es'].forEach((k,i) => {
+    const labels = ['Perú','México','España'];
+    const arr = s[k];
+    if (arr && arr.length) {
+      const real = arr.filter(r=>r.realizada==='SI').length;
+      chips.push(`${labels[i]} ${arr.length}${real?` · ${real} real.`:''}`);
+    }
+  });
+  const h = 86 + (chips.length ? 12 : 0);
+  y = pdfEnsureSpace(doc, y, h + 12);
+  const top = y;
+  doc.setFillColor(...pdfCol(s.sColor));
+  doc.rect(PDF_MARGIN, top, 3, h, 'F');
+  doc.setFillColor(250,250,253); doc.setDrawColor(...PDF_CLR.violetLight);
+  doc.roundedRect(PDF_MARGIN+3, top, PDF_CONTENT_W-3, h, 3, 3, 'FD');
+  let cy = top + 16;
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(...pdfCol(s.sColor));
+  doc.text(s.sdr, PDF_MARGIN+14, cy);
+  cy += 16;
+  const stats = [
+    {l:'agendadas', v:s.reus.length, c:PDF_CLR.text},
+    {l:'realizadas', v:s.real, c:PDF_CLR.green},
+    {l:'todavía', v:s.tod, c:PDF_CLR.amber},
+  ];
+  if (s.cot) stats.push({l:'con cot.', v:s.cot, c:PDF_CLR.violet});
+  if (s.won) stats.push({l:'WON', v:s.won, c:PDF_CLR.green});
+  if (s.pip) stats.push({l:'pipeline', v:pdfMoney(s.pip), c:PDF_CLR.green});
+  let sx = PDF_MARGIN+14;
+  stats.forEach(st => {
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(...st.c);
+    doc.text(String(st.v), sx, cy);
+    const w1 = doc.getTextWidth(String(st.v));
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...PDF_CLR.gray);
+    doc.text(st.l, sx, cy+9);
+    sx += Math.max(w1, doc.getTextWidth(st.l)) + 16;
+  });
+  cy += 20;
+  const pct = s.pct;
+  const statusTxt = pct>=100?'meta cumplida':pct>=80?'buena dirección':pct>=41?'atención':'urgente mejorar';
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...pdfCol(s.semBg||s.sColor));
+  doc.text(`${s.real} realizadas de meta ${meta} · ${pct}% — ${statusTxt}`, PDF_MARGIN+14, cy);
+  cy += 6;
+  pdfProgressBar(doc, cy, pct, s.semBg||s.sColor);
+  cy += 9;
+  if (chips.length) {
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...PDF_CLR.text);
+    doc.text(chips.join('   •   '), PDF_MARGIN+14, cy+3);
   }
-  return pdf;
+  return top + h + 12;
+}
+
+function pdfTable(doc, y, head, body, opts = {}) {
+  if (!body.length) return y;
+  doc.autoTable({
+    head:[head], body, startY:y,
+    margin:{left:PDF_MARGIN, right:PDF_MARGIN},
+    theme:'striped',
+    styles:{font:'helvetica', fontSize:8.5, textColor:PDF_CLR.text, cellPadding:5, lineColor:PDF_CLR.violetLight, lineWidth:0.5, overflow:'linebreak'},
+    headStyles:{fillColor:PDF_CLR.violet, textColor:PDF_CLR.white, fontStyle:'bold', fontSize:7.5},
+    alternateRowStyles:{fillColor:PDF_CLR.violetLight},
+    ...opts,
+  });
+  return doc.lastAutoTable.finalY + 14;
+}
+
+function pdfChartRow(doc, y, boxes) {
+  boxes = boxes.filter(Boolean);
+  if (!boxes.length) return y;
+  const gap = 16, boxW = (PDF_CONTENT_W - gap*(boxes.length-1))/boxes.length, imgH = 130, boxH = imgH + 26;
+  y = pdfEnsureSpace(doc, y, boxH);
+  boxes.forEach((b,i) => {
+    const x = PDF_MARGIN + i*(boxW+gap);
+    doc.setFillColor(...PDF_CLR.violetBg); doc.setDrawColor(...PDF_CLR.violetLight);
+    doc.roundedRect(x, y, boxW, boxH, 4, 4, 'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...PDF_CLR.gray);
+    doc.text(b.title.toUpperCase(), x+10, y+14);
+    if (b.img) doc.addImage(b.img, 'PNG', x+10, y+20, boxW-20, imgH);
+  });
+  return y + boxH + 14;
+}
+
+function pdfChartFull(doc, y, title, img) {
+  if (!img) return y;
+  const h = 170;
+  y = pdfEnsureSpace(doc, y, h+26);
+  doc.setFillColor(...PDF_CLR.violetBg); doc.setDrawColor(...PDF_CLR.violetLight);
+  doc.roundedRect(PDF_MARGIN, y, PDF_CONTENT_W, h+26, 4, 4, 'FD');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...PDF_CLR.gray);
+  doc.text(title.toUpperCase(), PDF_MARGIN+10, y+14);
+  doc.addImage(img, 'PNG', PDF_MARGIN+10, y+20, PDF_CONTENT_W-20, h);
+  return y + h + 26 + 14;
+}
+
+function pdfCountryBars(doc, y, rows, max, barColor) {
+  // rows: [{label, total, real, pip}]
+  rows.forEach(p => {
+    y = pdfEnsureSpace(doc, y, 16);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...PDF_CLR.text);
+    doc.text(p.label, PDF_MARGIN, y+5);
+    const barX = PDF_MARGIN + 95, barW = PDF_CONTENT_W - 95 - 140;
+    doc.setFillColor(...PDF_CLR.violetLight); doc.roundedRect(barX, y, barW, 8, 3, 3, 'F');
+    const w = Math.max(0, p.total/max*barW);
+    if (w > 0.5) { doc.setFillColor(...pdfCol(barColor)); doc.roundedRect(barX, y, w, 8, 3, 3, 'F'); }
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(...PDF_CLR.text);
+    doc.text(String(p.total), barX+barW+8, y+7);
+    let tx = barX+barW+30;
+    if (p.real !== undefined) {
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...PDF_CLR.green);
+      doc.text(`${p.real} realiz.`, tx, y+7); tx += 45;
+    }
+    if (p.pip) {
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...PDF_CLR.violet);
+      doc.text(pdfMoney(p.pip), tx, y+7);
+    }
+    y += 14;
+  });
+  return y + 8;
+}
+
+function pdfNodata(doc, y, text) {
+  y = pdfEnsureSpace(doc, y, 16);
+  doc.setFont('helvetica','italic'); doc.setFontSize(9); doc.setTextColor(...PDF_CLR.gray);
+  doc.text(text, PDF_MARGIN, y);
+  return y + 16;
+}
+
+function pdfPais(p) { return PDF_PAIS_LABEL[p] || p || '—'; }
+
+// Algunas etiquetas de país en los datos ya vienen con emoji de bandera embebido
+// (p.ej. '🇵🇪 Perú'); la fuente estándar de jsPDF no tiene esos glifos y los
+// dibuja como caracteres sueltos rotos, así que los quitamos antes de imprimir.
+function pdfClean(s) { return String(s).replace(/[\u{1F000}-\u{1FFFF}]/gu, '').trim(); }
+
+// Arma el PDF del reporte con texto real (seleccionable/editable), no una captura
+// de pantalla: cada sección se dibuja con jsPDF + autoTable; los gráficos (donut,
+// barras, línea) van embebidos como imágenes porque son visuales, no texto.
+function buildReportePdf(d) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p','pt','a4');
+  doc.setFont('helvetica','normal');
+
+  // ── Encabezado ──
+  const introText = d.period==='week'
+    ? 'Les traigo el reporte de la semana — a puertas de cerrar el mes está bueno reflexionar sobre cómo vamos para ajustar donde tengamos que ajustar.'
+    : 'Acá va el cierre mensual completo — los números hablan por sí solos, con contexto donde importa.';
+  doc.setFillColor(...PDF_CLR.violet);
+  doc.rect(0, 0, PDF_PAGE_W, 132, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(168,158,222);
+  doc.text('Hola team', PDF_MARGIN, 32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(212,207,240);
+  const introLines = doc.splitTextToSize(introText, PDF_CONTENT_W);
+  doc.text(introLines, PDF_MARGIN, 45);
+  let hy = 45 + introLines.length*11 + 12;
+  doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255);
+  doc.text(`Reporte ${d.period==='week'?'Semanal':'Mensual'} SDR — eBombo`, PDF_MARGIN, hy);
+  hy += 15;
+  doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(212,207,240);
+  doc.text(`${d.period==='week'?`Semana ${d.curSemana} — `:''}${d.MONTHS[d.curMonth-1]} ${d.curYear}`, PDF_MARGIN, hy);
+  hy += 14;
+  doc.setDrawColor(74,68,152); doc.line(PDF_MARGIN, hy, PDF_PAGE_W-PDF_MARGIN, hy);
+  hy += 12;
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(168,158,222);
+  doc.text(`Emisión: ${d.dateLabel}     Equipo: SDR Outbound + Bilit + BDEV     Mercados Eventos: Perú · México · España     Mercado Bilit: Perú`, PDF_MARGIN, hy, {maxWidth: PDF_CONTENT_W});
+
+  let y = 132 + 24;
+
+  // ── 1. Resumen Ejecutivo ──
+  y = pdfSectionHeader(doc, y, 1, 'Resumen Ejecutivo');
+  y = pdfKpiCards(doc, y, [
+    {label:'Reuniones totales', value:d.totAgendadas, color:PDF_CLR.violet},
+    {label:'Realizadas', value:d.totRealizadas, color:PDF_CLR.green},
+    {label:'Todavía', value:d.totTodavia, color:PDF_CLR.amber},
+    {label:'Con cotización', value:d.totConCot, color:PDF_CLR.violet},
+    {label:'WON', value:d.totWON, color:PDF_CLR.green},
+    {label:'HOT', value:d.totHOT, color:PDF_CLR.amber},
+    {label:'Pipeline USD', value:pdfMoney(d.totPipeline), color:PDF_CLR.green},
+  ]);
+  y = pdfChartRow(doc, y, [
+    {title:'Estado de reuniones', img:d.imgDonut},
+    d.imgSdrBar ? {title:'Reuniones por SDR', img:d.imgSdrBar} : null,
+  ]);
+
+  // ── 2. Eventos — Grace y Leandro ──
+  y = pdfSectionHeader(doc, y, 2, 'Eventos — Grace y Leandro');
+  if (d.eventosStats.length) {
+    d.eventosStats.forEach(s => { y = pdfSdrCard(doc, y, s, d.META_EVENTOS); });
+  } else {
+    y = pdfNodata(doc, y, 'Sin reuniones de Eventos para este período.');
+  }
+  if (d.evWeekRows.length) {
+    y = pdfSubLabel(doc, y, 'Reuniones por semana');
+    const head = ['Semana', ...d.eventosStats.map(s=>s.sdr), 'Total'];
+    const body = d.evWeekRows.map(w => [
+      (w.allTod?'* ':'')+'Sem '+w.sem,
+      ...w.bySDR.map(x => `${x.real||''}${x.tod?`${x.real?' +':'+'}${x.tod}*`:''}${!x.real&&!x.tod?'—':''}`),
+      `${w.totalReal}${w.totalTod?` +${w.totalTod}*`:''}`,
+    ]);
+    body.push(['TOTAL', ...d.eventosStats.map(s=>`${s.real}${s.tod?` +${s.tod}*`:''}`), String(d.evRealReus.length)]);
+    y = pdfTable(doc, y, head, body);
+    y = pdfNote(doc, y, '* Proyección — reuniones TODAVÍA');
+  }
+  if (d.evPaisRows.some(p => p.sdrs.some(x=>x.tot>0))) {
+    y = pdfSubLabel(doc, y, 'Avance por país vs meta');
+    const head = ['País','Meta/SDR', ...d.eventosStats.map(s=>s.sdr)];
+    const body = d.evPaisRows.map(p => [pdfClean(p.label), `${p.meta} reu.`, ...p.sdrs.map(x=>`${x.n}/${p.meta} ${x.pct}%`)]);
+    y = pdfTable(doc, y, head, body);
+  }
+  if (d.evCanalRows.length) {
+    y = pdfSubLabel(doc, y, 'Canal de agendamiento');
+    const head = ['Canal', ...d.evSemanas.map(s=>'Sem '+s), 'Total', '%'];
+    const body = d.evCanalRows.map(c => [c.canal, ...c.sems.map(n=>n||'—'), String(c.tot), c.pct+'%']);
+    body.push(['TOTAL', ...d.evSemanas.map(sem=>String(d.evRealReus.filter(r=>r.semana===sem).length)), String(d.evRealReus.length), '100%']);
+    y = pdfTable(doc, y, head, body);
+  }
+  if (d.evInboundReus.length) {
+    y = pdfSubLabel(doc, y, 'Inbound');
+    const pip = d.evInboundReus.reduce((s,r)=>s+(r.monto||0),0);
+    y = pdfKpiCards(doc, y, [
+      {label:'Reuniones inbound', value:d.evInboundReus.length, color:PDF_CLR.violet},
+      {label:'Realizadas', value:d.evInboundReus.filter(r=>r.realizada==='SI').length, color:PDF_CLR.green},
+      {label:'Todavía', value:d.evInboundReus.filter(r=>r.realizada==='TODAVIA').length, color:PDF_CLR.amber},
+      ...(pip ? [{label:'Pipeline', value:pdfMoney(pip), color:PDF_CLR.green}] : []),
+    ]);
+    y = pdfTable(doc, y, ['SDR','Empresa','País','Realizada','Estado','Monto'],
+      d.evInboundReus.map(r => [r.sdr, r.empresa, pdfPais(r.pais), r.realizada||'—', r.estado||'—', pdfMoney(r.monto)]));
+  }
+  if (d.evPipDeals.length) {
+    y = pdfSubLabel(doc, y, 'Pipeline generado');
+    const body = d.evPipDeals.map(r => [r.sdr, r.empresa, pdfPais(r.pais), 'Sem '+(r.semana||'—'), pdfMoney(r.monto)]);
+    body.push(['TOTAL','','','', pdfMoney(d.evPipDeals.reduce((s,r)=>s+(r.monto||0),0))]);
+    y = pdfTable(doc, y, ['SDR','Empresa','País','Sem.','Monto USD'], body);
+    if (d.evPipPais.length) y = pdfCountryBars(doc, y, d.evPipPais.map(p=>({label:pdfClean(p.label), total:p.total})), d.evPipMax, PDF_CLR.violet);
+  }
+  if (d.todaviaEntries.length) {
+    y = pdfSubLabel(doc, y, 'Proyección — reuniones TODAVÍA');
+    const body = [];
+    d.todaviaEntries.forEach(([sem, rr]) => rr.forEach((r,i) => body.push([i===0?sem:'', r.sdr, r.empresa, pdfPais(r.pais)])));
+    y = pdfTable(doc, y, ['Semana','SDR','Empresa','País'], body);
+  }
+
+  // ── 3. Canal de agendamiento ──
+  if (d.replySdrReport.length || d.prospBuckets.length) {
+    y = pdfSectionHeader(doc, y, 3, 'Canal de agendamiento');
+    if (d.replySdrReport.length) {
+      y = pdfSubLabel(doc, y, 'REPLY — por SDR');
+      const body = d.replySdrReport.map(x => [x.sdr, String(x.n), Math.round(x.n/d.replyReus.length*100)+'%']);
+      body.push(['TOTAL REPLY', String(d.replyReus.length), '100%']);
+      y = pdfTable(doc, y, ['SDR','Reuniones','%'], body);
+    }
+    if (d.prospBuckets.length) {
+      y = pdfSubLabel(doc, y, 'Prospección — por canal');
+      const body = d.prospBuckets.map(({k,total,sdrs}) => [k, String(total), (d.prospReus.length?Math.round(total/d.prospReus.length*100):0)+'%', sdrs.map(x=>`${x.sdr} ${x.n}`).join(', ')]);
+      body.push(['TOTAL PROSP.', String(d.prospReus.length), '100%', '']);
+      y = pdfTable(doc, y, ['Canal','Reuniones','%','Por SDR'], body);
+    }
+    y = pdfChartRow(doc, y, [
+      d.imgReply ? {title:'REPLY por SDR', img:d.imgReply} : null,
+      d.imgProsp ? {title:'Prospección por canal', img:d.imgProsp} : null,
+    ]);
+  }
+
+  // ── 4. Bilit — Carmen ──
+  if (d.bilitReus.length) {
+    const secNum = d.canalSdrData.length ? 4 : 3;
+    y = pdfSectionHeader(doc, y, secNum, 'Bilit — Carmen');
+    y = pdfSdrCard(doc, y, {
+      sdr:'Carmen · Bilit inbound', reus:d.bilitReus, real:d.bilitReal, tod:d.bilitTod,
+      cot:0, won:d.bilitWon, pip:0, pct:d.bilitPct, semBg:d.bilitSemBg, sColor:PDF_CLR.green,
+    }, d.META_CARMEN);
+    if (d.bilitHot) y = pdfParagraph(doc, y, `HOT: ${d.bilitHot}`, {size:9, color:PDF_CLR.amber, bold:true});
+    if (d.bilitNoShow) {
+      const rate = Math.round(d.bilitNoShow/((d.bilitReal+d.bilitNoShow)||1)*100);
+      y = pdfParagraph(doc, y, `Tasa de no-show: ${rate}% (${d.bilitNoShow} de ${d.bilitReal+d.bilitNoShow} demos)`, {size:9});
+    }
+  }
+
+  // ── 5. BDEV + Inbound orgánico ──
+  if (d.bdevReus.length) {
+    const secNum = 3 + [d.canalSdrData.length, d.bilitReus.length].filter(Boolean).length;
+    y = pdfSectionHeader(doc, y, secNum, 'BDEV + Inbound orgánico');
+    const pip = d.bdevReus.reduce((s,r)=>s+(r.monto||0),0);
+    y = pdfKpiCards(doc, y, [
+      {label:'Reuniones BDEV', value:d.bdevReus.length, color:PDF_CLR.violet},
+      {label:'Realizadas', value:d.bdevReus.filter(r=>r.realizada==='SI').length, color:PDF_CLR.green},
+      ...(pip ? [{label:'Pipeline', value:pdfMoney(pip), color:PDF_CLR.green}] : []),
+    ]);
+    if (d.bdevByPais.length) {
+      y = pdfSubLabel(doc, y, 'Reuniones por país');
+      y = pdfCountryBars(doc, y, d.bdevByPais.map(p=>({label:pdfClean(p.pais), total:p.total, real:p.real, pip:p.pip})), d.bdevPaisMax, [251,146,60]);
+      y = pdfTable(doc, y, ['País','Reuniones','Realizadas','Pipeline USD'],
+        d.bdevByPais.map(p => [pdfClean(p.pais), String(p.total), p.real||'—', p.pip?pdfMoney(p.pip):'—']));
+    }
+  }
+
+  // ── Evolución Semanal del Mes ──
+  if (d.period==='month' && d.semanasData.length) {
+    y = pdfSectionHeader(doc, y, '+', 'Evolución Semanal del Mes');
+    const head = ['Semana', ...d.canalSdrNames, 'Total Ag.', 'Realizadas'];
+    const body = d.semanasData.map(s => [
+      'Sem '+s.sem,
+      ...s.bySdr.map(x => x.agendadas ? `${x.agendadas} / ${x.realizadas}` : '—'),
+      String(s.total), String(s.realizadas||'—'),
+    ]);
+    body.push(['TOTAL', ...d.canalSdrNames.map(sdr => `${d.periodReus.filter(r=>r.sdr===sdr).length} / ${d.periodReus.filter(r=>r.sdr===sdr&&r.realizada==='SI').length}`), String(d.totAgendadas), String(d.totRealizadas)]);
+    y = pdfTable(doc, y, head, body);
+    y = pdfNote(doc, y, 'Formato por SDR: agendadas / realizadas');
+    y = pdfChartFull(doc, y, 'Evolución semanal — agendadas vs. realizadas', d.imgSemLine);
+  }
+
+  // ── Pie de página (pegado siempre al fondo de la página en la que termina) ──
+  if (y + 70 > PDF_BOTTOM) doc.addPage();
+  const footY = PDF_PAGE_H - 70;
+  doc.setFillColor(...PDF_CLR.violet);
+  doc.rect(0, footY, PDF_PAGE_W, 70, 'F');
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(212,207,240);
+  doc.text(d.period==='week' ? 'Gracias team! Buen fin de semana, volvemos recargados.' : 'Gracias team! Cerramos el mes — a seguir construyendo.', PDF_MARGIN, footY+22);
+  doc.setDrawColor(74,68,152); doc.line(PDF_MARGIN, footY+32, PDF_PAGE_W-PDF_MARGIN, footY+32);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(168,158,222);
+  doc.text(`eBombo SDR  ·  Reporte Interno ${d.MONTHS[d.curMonth-1]} ${d.curYear}  ·  Confidencial  ·  Generado el ${d.dateLabel}`, PDF_MARGIN, footY+46);
+
+  return doc;
 }
 
 async function exportReporte(period) {
@@ -2735,9 +3114,18 @@ ${period==='month'&&semanasData.length?`<div class="section">
 </div>
 </body></html>`;
 
-  // Generar PDF real (con los gráficos incluidos) y descargarlo
+  // Generar PDF real (texto seleccionable/editable, con los gráficos como imágenes) y descargarlo
   const fname = `reporte_${period==='week'?'semana':'mes'}_${MONTHS[curMonth-1].toLowerCase()}_${curYear}.pdf`;
-  const pdf = await htmlToPdf(html);
+  const pdf = buildReportePdf({
+    period, curMonth, curYear, curSemana, MONTHS, dateLabel,
+    totAgendadas, totRealizadas, totTodavia, totConCot, totWON, totHOT, totPipeline,
+    imgDonut, imgSdrBar, imgReply, imgProsp, imgSemLine,
+    eventosStats, evWeekRows, evPaisRows, evCanalRows, evSemanas, evRealReus, evInboundReus, evPipDeals, evPipPais, evPipMax,
+    todaviaEntries, replySdrReport, replyReus, prospBuckets, prospReus, canalSdrData,
+    bilitReus, bilitReal, bilitNoShow, bilitTod, bilitWon, bilitHot, bilitPct, bilitSemBg,
+    bdevReus, bdevByPais, bdevPaisMax, semanasData, canalSdrNames, periodReus,
+    META_EVENTOS, META_CARMEN,
+  });
   pdf.save(fname);
 
   // También enviar por correo si hay destinatarios configurados: reporte completo
