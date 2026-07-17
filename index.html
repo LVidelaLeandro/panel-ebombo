@@ -3461,10 +3461,21 @@ function importReunionesExcel(file) {
       msg += '\n\n¿Confirmás la carga?';
       if (!confirm(msg)) return;
 
-      toUpdate.forEach(({id, rec}) => db.ref('reus').child(id).update(rec));
-      toCreate.forEach(({id, rec}) => db.ref('reus').child(id).set(rec));
-      toDelete.forEach(id => db.ref('reus').child(id).update({_deleted:true}));
-      alert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s)${fullSync?`, ${toDelete.length} borrada(s)`:''}.`);
+      // Un solo guardado combinado (multi-path update) en vez de cientos de escrituras sueltas:
+      // más rápido y evita que el navegador quede esperando cientos de respuestas de Firebase.
+      const batch = {};
+      toUpdate.forEach(({id, rec}) => { batch[id] = {...fbReus[id], ...rec}; });
+      toCreate.forEach(({id, rec}) => { batch[id] = rec; });
+      toDelete.forEach(id => { batch[id] = {...fbReus[id], _deleted:true}; });
+
+      db.ref('reus').update(batch)
+        .then(() => {
+          alert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s)${fullSync?`, ${toDelete.length} borrada(s)`:''}.`);
+        })
+        .catch(err => {
+          console.error('[importReunionesExcel] Error al guardar:', err);
+          alert('Hubo un error al guardar en Firebase: ' + err.message);
+        });
     } catch (err) {
       console.error('[importReunionesExcel] Error:', err);
       alert('Hubo un error al leer el Excel: ' + err.message);
