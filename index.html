@@ -3328,8 +3328,26 @@ function importReunionesExcel(file) {
         return;
       }
 
-      const norm = v => stripAccents(String(v||'').trim().toUpperCase());
+      const norm = v => stripAccents(String(v||'').trim().toUpperCase()).replace(/\s+/g, ' ');
+      const compositeKey = (mes, semana, sdr, empresa) => [mes, semana, norm(sdr), norm(empresa)].join('||');
+
+      // Índice de reuniones ya cargadas, normalizando tildes/mayúsculas/espacios en SDR y Empresa,
+      // para reconocer la misma reunión aunque el Excel la escriba con distinto acento o capitalización
+      // (ej. "Líder Perú" vs "Lider Peru", "- bilit" vs "- Bilit").
+      const existingByComposite = {};
+      const existingByEmpresa = {};
+      Object.keys(fbReus).forEach(k => {
+        const r = fbReus[k];
+        if (r._deleted) return;
+        const ck = compositeKey(r.mes||0, r.semana||0, r.sdr, r.empresa);
+        if (!existingByComposite[ck]) existingByComposite[ck] = k;
+        const en = norm(r.empresa);
+        if (!existingByEmpresa[en]) existingByEmpresa[en] = [];
+        existingByEmpresa[en].push({mes:r.mes||0, semana:r.semana||0, sdr:r.sdr||''});
+      });
+
       const toUpdate = [], toCreate = [], skipped = [];
+      const posiblesDup = [];
       const idSeen = {};
       const dupIds = [];
       rawRows.slice(1).forEach((row, i) => {
@@ -3371,19 +3389,29 @@ function importReunionesExcel(file) {
           monto:      parseInt(obj.monto)||0,
         };
         const id = String(obj._id||'').trim();
-        const fallbackId = fbKey([rec.mes, rec.semana, rec.sdr, rec.empresa].join('__'));
+        const existingKey = existingByComposite[compositeKey(rec.mes, rec.semana, rec.sdr, rec.empresa)];
         if (id && fbReus[id]) {
           toUpdate.push({id, rec});
-        } else if (fbReus[fallbackId]) {
-          // Sin ID (o ID no encontrado), pero Mes+Semana+SDR+Empresa coincide con una reunión ya cargada: se actualiza esa en vez de duplicarla.
-          toUpdate.push({id: fallbackId, rec});
+        } else if (existingKey) {
+          // Sin ID (o ID no encontrado), pero Mes+Semana+SDR+Empresa coincide (sin importar tildes/mayúsculas)
+          // con una reunión ya cargada: se actualiza esa en vez de duplicarla.
+          toUpdate.push({id: existingKey, rec});
         } else {
-          toCreate.push({id: fallbackId, rec:{...rec, _id:fallbackId}});
+          const newId = fbKey([rec.mes, rec.semana, rec.sdr, rec.empresa].join('__'));
+          toCreate.push({id: newId, rec:{...rec, _id:newId}});
+          const cands = existingByEmpresa[norm(rec.empresa)];
+          if (cands && cands.length) {
+            posiblesDup.push(`Fila ${i+2} (${empresa}, Mes ${rec.mes} Sem ${rec.semana} ${rec.sdr}) — ya existe con: ${cands.map(c=>`Mes ${c.mes} Sem ${c.semana} ${c.sdr}`).join(' / ')}`);
+          }
         }
       });
 
       if (dupIds.length) {
         alert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
+      }
+
+      if (posiblesDup.length) {
+        alert(`Atención: ${posiblesDup.length} fila(s) se van a crear como reunión NUEVA, pero ya existe una reunión con la misma Empresa en otro Mes/Semana/SDR (puede ser una reunión repetida real, o una corrección de fecha/SDR que hiciste en el Excel — revisalo antes de confirmar):\n\n${posiblesDup.slice(0,15).join('\n')}${posiblesDup.length>15?`\n...y ${posiblesDup.length-15} más`:''}`);
       }
 
       if (!toUpdate.length && !toCreate.length) {
