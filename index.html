@@ -465,6 +465,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <button onclick="exportReunionesExcel()" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">⬇ Descargar Excel</button>
     <button onclick="document.getElementById('reu-excel-input').click()" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">⬆ Subir Excel</button>
     <input type="file" id="reu-excel-input" accept=".xlsx,.xls" style="display:none;" onchange="importReunionesExcel(this.files[0])">
+    <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;" title="Si lo tildás, las reuniones que ya están cargadas en el panel pero no aparecen en el Excel se van a borrar.">
+      <input type="checkbox" id="reu-excel-full-sync" style="cursor:pointer;">
+      Es la lista completa (borra lo que no esté)
+    </label>
     <button onclick="syncReusManual()" id="sync-reus-btn" style="font-size:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text);">↻ Sincronizar</button>
     <span id="sync-reus-status" style="font-size:11px;color:var(--muted);"></span>
   </div>
@@ -3330,6 +3334,7 @@ function importReunionesExcel(file) {
 
       const norm = v => stripAccents(String(v||'').trim().toUpperCase()).replace(/\s+/g, ' ');
       const compositeKey = (mes, semana, sdr, empresa) => [mes, semana, norm(sdr), norm(empresa)].join('||');
+      const fullSync = document.getElementById('reu-excel-full-sync').checked;
 
       // Índice de reuniones ya cargadas, normalizando tildes/mayúsculas/espacios en SDR y Empresa,
       // para reconocer la misma reunión aunque el Excel la escriba con distinto acento o capitalización
@@ -3343,9 +3348,10 @@ function importReunionesExcel(file) {
         if (!existingByComposite[ck]) existingByComposite[ck] = k;
         const en = norm(r.empresa);
         if (!existingByEmpresa[en]) existingByEmpresa[en] = [];
-        existingByEmpresa[en].push({mes:r.mes||0, semana:r.semana||0, sdr:r.sdr||''});
+        existingByEmpresa[en].push(k);
       });
 
+      const claimed = new Set();
       const toUpdate = [], toCreate = [], skipped = [];
       const posiblesDup = [];
       const idSeen = {};
@@ -3390,18 +3396,28 @@ function importReunionesExcel(file) {
         };
         const id = String(obj._id||'').trim();
         const existingKey = existingByComposite[compositeKey(rec.mes, rec.semana, rec.sdr, rec.empresa)];
-        if (id && fbReus[id]) {
+        if (id && fbReus[id] && !claimed.has(id)) {
           toUpdate.push({id, rec});
-        } else if (existingKey) {
+          claimed.add(id);
+        } else if (existingKey && !claimed.has(existingKey)) {
           // Sin ID (o ID no encontrado), pero Mes+Semana+SDR+Empresa coincide (sin importar tildes/mayúsculas)
           // con una reunión ya cargada: se actualiza esa en vez de duplicarla.
           toUpdate.push({id: existingKey, rec});
+          claimed.add(existingKey);
         } else {
-          const newId = fbKey([rec.mes, rec.semana, rec.sdr, rec.empresa].join('__'));
-          toCreate.push({id: newId, rec:{...rec, _id:newId}});
-          const cands = existingByEmpresa[norm(rec.empresa)];
-          if (cands && cands.length) {
-            posiblesDup.push(`Fila ${i+2} (${empresa}, Mes ${rec.mes} Sem ${rec.semana} ${rec.sdr}) — ya existe con: ${cands.map(c=>`Mes ${c.mes} Sem ${c.semana} ${c.sdr}`).join(' / ')}`);
+          // No matchea por Mes+Semana+SDR+Empresa. Si hay UNA sola reunión ya cargada con la misma
+          // Empresa (y todavía no fue tomada por otra fila de este mismo Excel), se asume que es la
+          // misma reunión con el Mes/Semana/SDR corregido, y se actualiza esa en vez de duplicarla.
+          const cands = (existingByEmpresa[norm(rec.empresa)]||[]).filter(k => !claimed.has(k));
+          if (cands.length === 1) {
+            toUpdate.push({id: cands[0], rec});
+            claimed.add(cands[0]);
+          } else {
+            const newId = fbKey([rec.mes, rec.semana, rec.sdr, rec.empresa].join('__'));
+            toCreate.push({id: newId, rec:{...rec, _id:newId}});
+            if (cands.length > 1) {
+              posiblesDup.push(`Fila ${i+2} (${empresa}, Mes ${rec.mes} Sem ${rec.semana} ${rec.sdr}) — hay ${cands.length} reuniones ya cargadas con esa Empresa y no se pudo saber cuál es (se crea como nueva): ${cands.map(k=>{const c=fbReus[k]; return `Mes ${c.mes||0} Sem ${c.semana||0} ${c.sdr||''}`;}).join(' / ')}`);
+            }
           }
         }
       });
@@ -3418,14 +3434,25 @@ function importReunionesExcel(file) {
         alert('No se encontraron filas válidas para cargar (revisá que la columna Empresa esté completa).');
         return;
       }
+
+      const toDelete = fullSync
+        ? Object.keys(fbReus).filter(k => !fbReus[k]._deleted && !claimed.has(k))
+        : [];
+
       let msg = `Excel leído: ${rawRows.length-1} fila(s) de datos.\nSe van a actualizar ${toUpdate.length} reunión(es) existente(s) y crear ${toCreate.length} nueva(s).`;
       if (skipped.length) msg += `\nSe omiten ${skipped.length} fila(s) sin Empresa (filas ${skipped.slice(0,20).join(', ')}${skipped.length>20?`, ...y ${skipped.length-20} más`:''}).`;
-      msg += '\n\nNo se borra ninguna reunión existente que no esté en el Excel.\n\n¿Confirmás la carga?';
+      if (fullSync) {
+        msg += `\n\nMarcaste "es la lista completa": se van a BORRAR ${toDelete.length} reunión(es) que están cargadas en el panel pero no aparecen en este Excel:\n${toDelete.slice(0,15).map(k=>{const r=fbReus[k]; return `- ${r.empresa} (Mes ${r.mes||0} Sem ${r.semana||0} ${r.sdr||''})`;}).join('\n')}${toDelete.length>15?`\n...y ${toDelete.length-15} más`:''}`;
+      } else {
+        msg += '\n\nNo se borra ninguna reunión existente que no esté en el Excel.';
+      }
+      msg += '\n\n¿Confirmás la carga?';
       if (!confirm(msg)) return;
 
       toUpdate.forEach(({id, rec}) => db.ref('reus').child(id).update(rec));
       toCreate.forEach(({id, rec}) => db.ref('reus').child(id).set(rec));
-      alert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s).`);
+      toDelete.forEach(id => db.ref('reus').child(id).update({_deleted:true}));
+      alert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s)${fullSync?`, ${toDelete.length} borrada(s)`:''}.`);
     } catch (err) {
       console.error('[importReunionesExcel] Error:', err);
       alert('Hubo un error al leer el Excel: ' + err.message);
