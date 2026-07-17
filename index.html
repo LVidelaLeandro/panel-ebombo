@@ -3435,8 +3435,20 @@ function importReunionesExcel(file) {
         return;
       }
 
+      // Reuniones que quedaron "huérfanas" del sync de reuniones_ago2025.xlsx pero que el usuario
+      // confirmó que pueden ser una segunda visita real a la misma empresa en otro mes/semana
+      // (no un duplicado de carga): no se borran aunque no matcheen con ninguna fila del Excel.
+      const REU_SYNC_NUNCA_BORRAR = new Set([
+        'reu_1784127013414_0', // La Finca Resort
+        'reu_1784127013414_1', // Turkish Airlines
+        'reu_1784127013414_2', // Caleidos
+        'reu_1784127013414_3', // UTEC
+        '5__4__Grace__Hr_ratings', // Hr ratings
+        '5__5__Carmen__Sofi_Suasnabar_-_Bilit', // Sofi Suasnabar - Bilit
+        'reu_1781899872794', // Straumann
+      ]);
       const toDelete = fullSync
-        ? Object.keys(fbReus).filter(k => !fbReus[k]._deleted && !claimed.has(k))
+        ? Object.keys(fbReus).filter(k => !fbReus[k]._deleted && !claimed.has(k) && !REU_SYNC_NUNCA_BORRAR.has(k))
         : [];
 
       let msg = `Excel leído: ${rawRows.length-1} fila(s) de datos.\nSe van a actualizar ${toUpdate.length} reunión(es) existente(s) y crear ${toCreate.length} nueva(s).`;
