@@ -2547,8 +2547,13 @@ async function exportReporte(period) {
 
   const actRecs = records.filter(r => {
     if (!r.fecha) return false;
-    if (period === 'week') return r.fecha >= weekStart && r.fecha <= weekEnd;
-    return r.fecha.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`);
+    // La semana calendario (lunes a domingo) puede empezar en el mes anterior (ej. semana que
+    // arranca el 29/6 y termina el 5/7): se exige además que la fecha sea del mes en curso, para
+    // que un "Reporte semana"/"Reporte mes" corrido a principio de mes no traiga actividad de los
+    // últimos días del mes anterior.
+    const inMonth = r.fecha.startsWith(`${curYear}-${String(curMonth).padStart(2,'0')}`);
+    if (period === 'week') return inMonth && r.fecha >= weekStart && r.fecha <= weekEnd;
+    return inMonth;
   }).sort((a,b) => a.fecha.localeCompare(b.fecha));
 
   const allReus = getAllReus();
