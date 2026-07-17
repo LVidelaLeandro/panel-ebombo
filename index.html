@@ -3304,9 +3304,12 @@ function importReunionesExcel(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
+      console.log('[import] DEBUG A: antes de XLSX.read');
       const wb = XLSX.read(e.target.result, {type:'array'});
+      console.log('[import] DEBUG B: XLSX.read listo, hojas:', wb.SheetNames);
       const sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('reunion')) || wb.SheetNames[0];
       const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
+      console.log('[import] DEBUG C: sheet_to_json listo, filas:', rawRows.length);
       if (!rawRows.length) { alert('El Excel no tiene filas.'); return; }
 
       const stripAccents = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -3326,6 +3329,7 @@ function importReunionesExcel(file) {
         return null;
       };
       const headerRow = rawRows[0].map(matchReuHeaderKey);
+      console.log('[import] DEBUG D: header mapeado', headerRow);
 
       if (!headerRow.includes('empresa')) {
         alert(`No pude encontrar la columna "Empresa" en la primera fila de la hoja "${sheetName}".\n\nEsto pasa si se borró o corrió la fila de encabezados (Mes, Semana, SDR, Empresa, ...). La primera fila de la hoja tiene que ser exactamente esa, sin filas en blanco arriba.\n\nEncabezados encontrados en la fila 1: ${rawRows[0].map(h => `"${h}"`).join(', ')}`);
@@ -3339,6 +3343,7 @@ function importReunionesExcel(file) {
       // Índice de reuniones ya cargadas, normalizando tildes/mayúsculas/espacios en SDR y Empresa,
       // para reconocer la misma reunión aunque el Excel la escriba con distinto acento o capitalización
       // (ej. "Líder Perú" vs "Lider Peru", "- bilit" vs "- Bilit").
+      console.log('[import] DEBUG E: antes de armar indice, fbReus keys:', Object.keys(fbReus).length);
       const existingByComposite = {};
       const existingByEmpresa = {};
       Object.keys(fbReus).forEach(k => {
@@ -3350,6 +3355,7 @@ function importReunionesExcel(file) {
         if (!existingByEmpresa[en]) existingByEmpresa[en] = [];
         existingByEmpresa[en].push(k);
       });
+      console.log('[import] DEBUG F: indice armado', Object.keys(existingByComposite).length, Object.keys(existingByEmpresa).length);
 
       const claimed = new Set();
       const toUpdate = [], toCreate = [], skipped = [];
@@ -3421,6 +3427,7 @@ function importReunionesExcel(file) {
           }
         }
       });
+      console.log('[import] DEBUG G: loop de matching listo. toUpdate:', toUpdate.length, 'toCreate:', toCreate.length);
 
       if (dupIds.length) {
         alert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
@@ -3459,7 +3466,9 @@ function importReunionesExcel(file) {
         msg += '\n\nNo se borra ninguna reunión existente que no esté en el Excel.';
       }
       msg += '\n\n¿Confirmás la carga?';
+      console.log('[import] DEBUG H: antes de confirm(), toDelete:', toDelete.length);
       if (!confirm(msg)) return;
+      console.log('[import] DEBUG I: confirm() aceptado, arrancando guardado');
 
       // Un solo guardado combinado (multi-path update) en vez de cientos de escrituras sueltas:
       // más rápido y evita que el navegador quede esperando cientos de respuestas de Firebase.
