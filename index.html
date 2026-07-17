@@ -3254,12 +3254,14 @@ const REU_XLS_COLUMNS = [
   {key:'monto',      label:'Monto USD'},
 ];
 const REU_XLS_VALID = {
-  sdr:        ['Leandro','Grace','Carmen','Luziana','Lu','Angela'],
+  sdr:        ['Leandro','Grace','Carmen','Luziana','Angela'],
   pais:       ['PERU','MEXICO','ESPANA'],
   realizada:  ['SI','NO','TODAVIA'],
   cotizacion: ['SI','NO','TODAVIA'],
   estado:     ['','HOT','WON','LOST','PENDIENTE'],
 };
+// Abreviaturas de SDR que aparecen en algunos Excels y deben mapearse al nombre real ya usado en el panel.
+const REU_SDR_ALIASES = { 'lu': 'Luziana' };
 
 function exportReunionesExcel() {
   const reus = getAllReus().slice().sort((a,b) =>
@@ -3349,7 +3351,12 @@ function importReunionesExcel(file) {
         const estadoN     = norm(obj.estado);
         const paisN       = norm(obj.pais);
         const sdrRaw      = String(obj.sdr||'').trim();
-        const sdrMatch    = REU_XLS_VALID.sdr.find(s => s.toLowerCase() === sdrRaw.toLowerCase());
+        // El SDR puede venir con un sufijo de canal (ej. "Grace - Bilit"): para reconocer quién es
+        // el SDR real (y no duplicar reuniones ya cargadas con el nombre limpio) se mira solo la
+        // parte antes del guion.
+        const sdrPrefix   = sdrRaw.split(/\s*-\s*/)[0].trim();
+        const sdrAlias    = REU_SDR_ALIASES[sdrPrefix.toLowerCase()];
+        const sdrMatch    = sdrAlias || REU_XLS_VALID.sdr.find(s => s.toLowerCase() === sdrPrefix.toLowerCase());
 
         const rec = {
           mes:        parseInt(obj.mes)||0,
