@@ -3303,45 +3303,97 @@ function importReunionesExcel(file) {
       const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
       if (!rawRows.length) { alert('El Excel no tiene filas.'); return; }
 
-      const labelToKey = {};
-      REU_XLS_COLUMNS.forEach(c => { labelToKey[c.label.toLowerCase()] = c.key; });
-      labelToKey['id'] = '_id';
-      const headerRow = rawRows[0].map(h => labelToKey[String(h||'').trim().toLowerCase()] || null);
+      const stripAccents = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const matchReuHeaderKey = raw => {
+        const h = stripAccents(String(raw||'').trim().toLowerCase());
+        if (h === 'id' || h.startsWith('id (')) return '_id'; // "ID NEGOCIO"/"ID / LEAD" u otros IDs de CRM NO cuentan: solo la columna literal "ID" es el ID interno del panel.
+        if (h === 'mes') return 'mes';
+        if (h.includes('semana')) return 'semana';
+        if (h.includes('sdr')) return 'sdr';
+        if (h.includes('empresa')) return 'empresa';
+        if (h.includes('reali')) return 'realizada';
+        if (h.includes('pais')) return 'pais';
+        if (h.includes('canal')) return 'canal';
+        if (h.includes('cotiza')) return 'cotizacion';
+        if (h.includes('estado')) return 'estado';
+        if (h.includes('monto')) return 'monto';
+        return null;
+      };
+      const headerRow = rawRows[0].map(matchReuHeaderKey);
 
-      const toUpdate = [], toCreate = [], skipped = [];
+      if (!headerRow.includes('empresa')) {
+        alert(`No pude encontrar la columna "Empresa" en la primera fila de la hoja "${sheetName}".\n\nEsto pasa si se borró o corrió la fila de encabezados (Mes, Semana, SDR, Empresa, ...). La primera fila de la hoja tiene que ser exactamente esa, sin filas en blanco arriba.\n\nEncabezados encontrados en la fila 1: ${rawRows[0].map(h => `"${h}"`).join(', ')}`);
+        return;
+      }
+
+      const norm = v => String(v||'').trim().toUpperCase();
+      const toUpdate = [], toCreate = [], skipped = [], invalid = [];
+      const idSeen = {};
+      const dupIds = [];
       rawRows.slice(1).forEach((row, i) => {
         const obj = {};
         headerRow.forEach((field, ci) => { if (field) obj[field] = row[ci]; });
         const empresa = String(obj.empresa||'').trim();
-        if (!empresa) { if (row.some(c => String(c||'').trim())) skipped.push(i+2); return; }
+        if (!empresa) { skipped.push(i+2); return; }
+
+        const idCheck = String(obj._id||'').trim();
+        if (idCheck) {
+          if (idSeen[idCheck]) dupIds.push(`Fila ${i+2} (${empresa}) usa el mismo ID que la fila ${idSeen[idCheck]}`);
+          idSeen[idCheck] = i+2;
+        }
+
+        const realizadaN  = norm(obj.realizada);
+        const cotizacionN = norm(obj.cotizacion);
+        const estadoN     = norm(obj.estado);
+        const paisN       = stripAccents(norm(obj.pais));
+        const sdrRaw      = String(obj.sdr||'').trim();
+        const sdrMatch    = REU_XLS_VALID.sdr.find(s => s.toLowerCase() === sdrRaw.toLowerCase());
+        const rowIssues = [];
+        if (obj.realizada  && !REU_XLS_VALID.realizada.includes(realizadaN))   rowIssues.push(`Realizada="${obj.realizada}"`);
+        if (obj.cotizacion && !REU_XLS_VALID.cotizacion.includes(cotizacionN)) rowIssues.push(`Cotización="${obj.cotizacion}"`);
+        if (obj.estado     && !REU_XLS_VALID.estado.includes(estadoN))        rowIssues.push(`Estado="${obj.estado}"`);
+        if (obj.pais       && !REU_XLS_VALID.pais.includes(paisN))            rowIssues.push(`País="${obj.pais}"`);
+        if (sdrRaw         && !sdrMatch)                                     rowIssues.push(`SDR="${sdrRaw}"`);
+        if (rowIssues.length) invalid.push(`Fila ${i+2} (${empresa}): ${rowIssues.join(', ')}`);
 
         const rec = {
           mes:        parseInt(obj.mes)||0,
           semana:     parseInt(obj.semana)||0,
-          sdr:        String(obj.sdr||'').trim(),
+          sdr:        sdrMatch || sdrRaw,
           empresa,
-          realizada:  REU_XLS_VALID.realizada.includes(obj.realizada) ? obj.realizada : '',
-          pais:       String(obj.pais||'').trim(),
+          realizada:  REU_XLS_VALID.realizada.includes(realizadaN) ? realizadaN : '',
+          pais:       REU_XLS_VALID.pais.includes(paisN) ? paisN : String(obj.pais||'').trim(),
           canal:      String(obj.canal||'').trim(),
-          cotizacion: REU_XLS_VALID.cotizacion.includes(obj.cotizacion) ? obj.cotizacion : '',
-          estado:     REU_XLS_VALID.estado.includes(obj.estado) ? obj.estado : '',
+          cotizacion: REU_XLS_VALID.cotizacion.includes(cotizacionN) ? cotizacionN : '',
+          estado:     REU_XLS_VALID.estado.includes(estadoN) ? estadoN : '',
           monto:      parseInt(obj.monto)||0,
         };
         const id = String(obj._id||'').trim();
+        const fallbackId = fbKey([rec.mes, rec.semana, rec.sdr, rec.empresa].join('__'));
         if (id && fbReus[id]) {
           toUpdate.push({id, rec});
+        } else if (fbReus[fallbackId]) {
+          // Sin ID (o ID no encontrado), pero Mes+Semana+SDR+Empresa coincide con una reunión ya cargada: se actualiza esa en vez de duplicarla.
+          toUpdate.push({id: fallbackId, rec});
         } else {
-          const newId = 'reu_' + Date.now() + '_' + i;
-          toCreate.push({id:newId, rec:{...rec, _id:newId}});
+          toCreate.push({id: fallbackId, rec:{...rec, _id:fallbackId}});
         }
       });
+
+      if (invalid.length) {
+        alert(`Atención: ${invalid.length} fila(s) tienen valores no reconocidos en Realizada/Cotización/Estado (se guardan vacíos) o en País/SDR (se guardan tal cual están escritos, sin normalizar):\n\n${invalid.slice(0,15).join('\n')}${invalid.length>15?`\n...y ${invalid.length-15} más`:''}\n\nRevisá esas celdas en el Excel (Realizada/Cotización deben decir SI, NO o TODAVIA; SDR debe ser Leandro, Grace, Carmen o Luziana; País debe ser Perú, México o España) y volvé a subirlo si hace falta.`);
+      }
+
+      if (dupIds.length) {
+        alert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
+      }
 
       if (!toUpdate.length && !toCreate.length) {
         alert('No se encontraron filas válidas para cargar (revisá que la columna Empresa esté completa).');
         return;
       }
-      let msg = `Se van a actualizar ${toUpdate.length} reunión(es) existente(s) y crear ${toCreate.length} nueva(s).`;
-      if (skipped.length) msg += `\nSe omiten ${skipped.length} fila(s) sin empresa (filas ${skipped.join(', ')}).`;
+      let msg = `Excel leído: ${rawRows.length-1} fila(s) de datos.\nSe van a actualizar ${toUpdate.length} reunión(es) existente(s) y crear ${toCreate.length} nueva(s).`;
+      if (skipped.length) msg += `\nSe omiten ${skipped.length} fila(s) sin Empresa (filas ${skipped.slice(0,20).join(', ')}${skipped.length>20?`, ...y ${skipped.length-20} más`:''}).`;
       msg += '\n\nNo se borra ninguna reunión existente que no esté en el Excel.\n\n¿Confirmás la carga?';
       if (!confirm(msg)) return;
 
