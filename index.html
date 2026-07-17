@@ -3327,7 +3327,7 @@ function importReunionesExcel(file) {
       }
 
       const norm = v => stripAccents(String(v||'').trim().toUpperCase());
-      const toUpdate = [], toCreate = [], skipped = [], invalid = [];
+      const toUpdate = [], toCreate = [], skipped = [];
       const idSeen = {};
       const dupIds = [];
       rawRows.slice(1).forEach((row, i) => {
@@ -3342,30 +3342,25 @@ function importReunionesExcel(file) {
           idSeen[idCheck] = i+2;
         }
 
+        // Realizada/Cotización/Estado/País/SDR se toman tal como vienen (normalizados en mayúscula sin tilde);
+        // si aparece un valor nuevo (ej. "REVISAR", "Grace - Bilit"), se guarda igual en vez de descartarse.
         const realizadaN  = norm(obj.realizada);
         const cotizacionN = norm(obj.cotizacion);
         const estadoN     = norm(obj.estado);
         const paisN       = norm(obj.pais);
         const sdrRaw      = String(obj.sdr||'').trim();
         const sdrMatch    = REU_XLS_VALID.sdr.find(s => s.toLowerCase() === sdrRaw.toLowerCase());
-        const rowIssues = [];
-        if (obj.realizada  && !REU_XLS_VALID.realizada.includes(realizadaN))   rowIssues.push(`Realizada="${obj.realizada}"`);
-        if (obj.cotizacion && !REU_XLS_VALID.cotizacion.includes(cotizacionN)) rowIssues.push(`Cotización="${obj.cotizacion}"`);
-        if (obj.estado     && !REU_XLS_VALID.estado.includes(estadoN))        rowIssues.push(`Estado="${obj.estado}"`);
-        if (obj.pais       && !REU_XLS_VALID.pais.includes(paisN))            rowIssues.push(`País="${obj.pais}"`);
-        if (sdrRaw         && !sdrMatch)                                     rowIssues.push(`SDR="${sdrRaw}"`);
-        if (rowIssues.length) invalid.push(`Fila ${i+2} (${empresa}): ${rowIssues.join(', ')}`);
 
         const rec = {
           mes:        parseInt(obj.mes)||0,
           semana:     parseInt(obj.semana)||0,
           sdr:        sdrMatch || sdrRaw,
           empresa,
-          realizada:  REU_XLS_VALID.realizada.includes(realizadaN) ? realizadaN : '',
+          realizada:  realizadaN,
           pais:       REU_XLS_VALID.pais.includes(paisN) ? paisN : String(obj.pais||'').trim(),
           canal:      String(obj.canal||'').trim(),
-          cotizacion: REU_XLS_VALID.cotizacion.includes(cotizacionN) ? cotizacionN : '',
-          estado:     REU_XLS_VALID.estado.includes(estadoN) ? estadoN : '',
+          cotizacion: cotizacionN,
+          estado:     estadoN,
           monto:      parseInt(obj.monto)||0,
         };
         const id = String(obj._id||'').trim();
@@ -3379,10 +3374,6 @@ function importReunionesExcel(file) {
           toCreate.push({id: fallbackId, rec:{...rec, _id:fallbackId}});
         }
       });
-
-      if (invalid.length) {
-        alert(`Atención: ${invalid.length} fila(s) tienen valores no reconocidos en Realizada/Cotización/Estado (se guardan vacíos) o en País/SDR (se guardan tal cual están escritos, sin normalizar):\n\n${invalid.slice(0,15).join('\n')}${invalid.length>15?`\n...y ${invalid.length-15} más`:''}\n\nRevisá esas celdas en el Excel (Realizada/Cotización deben decir SI, NO o TODAVIA, con o sin tilde; SDR debe ser Leandro, Grace, Carmen, Luziana, Lu o Angela; País debe ser Perú, México o España, con o sin tilde) y volvé a subirlo si hace falta.`);
-      }
 
       if (dupIds.length) {
         alert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
