@@ -3299,23 +3299,47 @@ function exportReunionesExcel() {
   XLSX.writeFile(wb, `reuniones_ebombo_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
+// Modal propio (no nativo) para reemplazar alert()/confirm(): los diálogos nativos bloquean el
+// hilo principal del navegador esperando el clic, y encadenar varios (ID duplicado, posible
+// duplicado, confirmación final) hacía que Chrome mostrara "la página no responde".
+function reuModal(html, buttons) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--s1,#151b2b);color:var(--text,#fff);border:1px solid var(--border,#333);border-radius:10px;padding:1.25rem 1.5rem;max-width:600px;max-height:80vh;overflow:auto;font-size:13px;line-height:1.6;box-shadow:0 10px 40px rgba(0,0,0,.5);';
+    box.innerHTML = `<div style="white-space:pre-wrap;margin-bottom:1.1rem;">${html}</div>`;
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:.5rem;justify-content:flex-end;';
+    buttons.forEach(b => {
+      const btn = document.createElement('button');
+      btn.textContent = b.label;
+      btn.style.cssText = `padding:8px 16px;border-radius:6px;border:1px solid var(--border,#333);cursor:pointer;font-size:12px;background:${b.primary?'#22a86e':'var(--s2,#2a3142)'};color:${b.primary?'#fff':'var(--text,#fff)'};`;
+      btn.onclick = () => { document.body.removeChild(overlay); resolve(b.value); };
+      btnRow.appendChild(btn);
+    });
+    box.appendChild(btnRow);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+}
+const escHtml = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function reuAlert(msg) {
+  return reuModal(escHtml(msg), [{label:'OK', value:true, primary:true}]);
+}
+function reuConfirm(msg) {
+  return reuModal(escHtml(msg), [{label:'Cancelar', value:false}, {label:'Confirmar', value:true, primary:true}]);
+}
+
 function importReunionesExcel(file) {
-  document.title = 'DEBUG-0-inicio';
   if (!file) return;
-  document.title = 'DEBUG-0b-archivo-ok';
   const reader = new FileReader();
-  reader.onload = e => {
-    document.title = 'DEBUG-0c-reader-onload';
+  reader.onload = async e => {
     try {
-      console.log('[import] DEBUG A: antes de XLSX.read');
       const wb = XLSX.read(e.target.result, {type:'array'});
-      document.title = 'DEBUG-A-xlsx-read-ok';
-      console.log('[import] DEBUG B: XLSX.read listo, hojas:', wb.SheetNames);
       const sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('reunion')) || wb.SheetNames[0];
       const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {header:1, defval:''});
-      document.title = 'DEBUG-B-sheet-to-json-ok';
-      console.log('[import] DEBUG C: sheet_to_json listo, filas:', rawRows.length);
-      if (!rawRows.length) { alert('El Excel no tiene filas.'); return; }
+      if (!rawRows.length) { await reuAlert('El Excel no tiene filas.'); return; }
 
       const stripAccents = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g, '');
       const matchReuHeaderKey = raw => {
@@ -3334,23 +3358,19 @@ function importReunionesExcel(file) {
         return null;
       };
       const headerRow = rawRows[0].map(matchReuHeaderKey);
-      document.title = 'DEBUG-C-header-mapeado';
-      console.log('[import] DEBUG D: header mapeado', headerRow);
 
       if (!headerRow.includes('empresa')) {
-        alert(`No pude encontrar la columna "Empresa" en la primera fila de la hoja "${sheetName}".\n\nEsto pasa si se borró o corrió la fila de encabezados (Mes, Semana, SDR, Empresa, ...). La primera fila de la hoja tiene que ser exactamente esa, sin filas en blanco arriba.\n\nEncabezados encontrados en la fila 1: ${rawRows[0].map(h => `"${h}"`).join(', ')}`);
+        await reuAlert(`No pude encontrar la columna "Empresa" en la primera fila de la hoja "${sheetName}".\n\nEsto pasa si se borró o corrió la fila de encabezados (Mes, Semana, SDR, Empresa, ...). La primera fila de la hoja tiene que ser exactamente esa, sin filas en blanco arriba.\n\nEncabezados encontrados en la fila 1: ${rawRows[0].map(h => `"${h}"`).join(', ')}`);
         return;
       }
 
       const norm = v => stripAccents(String(v||'').trim().toUpperCase()).replace(/\s+/g, ' ');
       const compositeKey = (mes, semana, sdr, empresa) => [mes, semana, norm(sdr), norm(empresa)].join('||');
       const fullSync = document.getElementById('reu-excel-full-sync').checked;
-      document.title = 'DEBUG-D-fullsync-leido-' + fullSync;
 
       // Índice de reuniones ya cargadas, normalizando tildes/mayúsculas/espacios en SDR y Empresa,
       // para reconocer la misma reunión aunque el Excel la escriba con distinto acento o capitalización
       // (ej. "Líder Perú" vs "Lider Peru", "- bilit" vs "- Bilit").
-      console.log('[import] DEBUG E: antes de armar indice, fbReus keys:', Object.keys(fbReus).length);
       const existingByComposite = {};
       const existingByEmpresa = {};
       Object.keys(fbReus).forEach(k => {
@@ -3362,8 +3382,6 @@ function importReunionesExcel(file) {
         if (!existingByEmpresa[en]) existingByEmpresa[en] = [];
         existingByEmpresa[en].push(k);
       });
-      document.title = 'DEBUG-E-indice-armado';
-      console.log('[import] DEBUG F: indice armado', Object.keys(existingByComposite).length, Object.keys(existingByEmpresa).length);
 
       const claimed = new Set();
       const toUpdate = [], toCreate = [], skipped = [];
@@ -3435,19 +3453,17 @@ function importReunionesExcel(file) {
           }
         }
       });
-      document.title = 'DEBUG-F-loop-listo-' + toUpdate.length + '-' + toCreate.length;
-      console.log('[import] DEBUG G: loop de matching listo. toUpdate:', toUpdate.length, 'toCreate:', toCreate.length);
 
       if (dupIds.length) {
-        alert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
+        await reuAlert(`Atención: ${dupIds.length} fila(s) tienen el mismo ID que otra fila (probablemente copiaste una fila existente para crear una nueva reunión y no borraste la columna ID). Esas filas van a pisar la reunión original en vez de crear una nueva:\n\n${dupIds.slice(0,15).join('\n')}${dupIds.length>15?`\n...y ${dupIds.length-15} más`:''}\n\nBorrá el ID de esas filas nuevas en el Excel y volvé a subirlo.`);
       }
 
       if (posiblesDup.length) {
-        alert(`Atención: ${posiblesDup.length} fila(s) se van a crear como reunión NUEVA, pero ya existe una reunión con la misma Empresa en otro Mes/Semana/SDR (puede ser una reunión repetida real, o una corrección de fecha/SDR que hiciste en el Excel — revisalo antes de confirmar):\n\n${posiblesDup.slice(0,15).join('\n')}${posiblesDup.length>15?`\n...y ${posiblesDup.length-15} más`:''}`);
+        await reuAlert(`Atención: ${posiblesDup.length} fila(s) se van a crear como reunión NUEVA, pero ya existe una reunión con la misma Empresa en otro Mes/Semana/SDR (puede ser una reunión repetida real, o una corrección de fecha/SDR que hiciste en el Excel — revisalo antes de confirmar):\n\n${posiblesDup.slice(0,15).join('\n')}${posiblesDup.length>15?`\n...y ${posiblesDup.length-15} más`:''}`);
       }
 
       if (!toUpdate.length && !toCreate.length) {
-        alert('No se encontraron filas válidas para cargar (revisá que la columna Empresa esté completa).');
+        await reuAlert('No se encontraron filas válidas para cargar (revisá que la columna Empresa esté completa).');
         return;
       }
 
@@ -3466,7 +3482,6 @@ function importReunionesExcel(file) {
       const toDelete = fullSync
         ? Object.keys(fbReus).filter(k => !fbReus[k]._deleted && !claimed.has(k) && !REU_SYNC_NUNCA_BORRAR.has(k))
         : [];
-      document.title = 'DEBUG-G-todelete-' + toDelete.length;
 
       let msg = `Excel leído: ${rawRows.length-1} fila(s) de datos.\nSe van a actualizar ${toUpdate.length} reunión(es) existente(s) y crear ${toCreate.length} nueva(s).`;
       if (skipped.length) msg += `\nSe omiten ${skipped.length} fila(s) sin Empresa (filas ${skipped.slice(0,20).join(', ')}${skipped.length>20?`, ...y ${skipped.length-20} más`:''}).`;
@@ -3476,11 +3491,7 @@ function importReunionesExcel(file) {
         msg += '\n\nNo se borra ninguna reunión existente que no esté en el Excel.';
       }
       msg += '\n\n¿Confirmás la carga?';
-      document.title = 'DEBUG-H-antes-de-confirm';
-      console.log('[import] DEBUG H: antes de confirm(), toDelete:', toDelete.length);
-      if (!confirm(msg)) return;
-      document.title = 'DEBUG-I-confirm-aceptado';
-      console.log('[import] DEBUG I: confirm() aceptado, arrancando guardado');
+      if (!(await reuConfirm(msg))) return;
 
       // Un solo guardado combinado (multi-path update) en vez de cientos de escrituras sueltas:
       // más rápido y evita que el navegador quede esperando cientos de respuestas de Firebase.
@@ -3489,22 +3500,20 @@ function importReunionesExcel(file) {
       toCreate.forEach(({id, rec}) => { batch[id] = rec; });
       toDelete.forEach(id => { batch[id] = {...fbReus[id], _deleted:true}; });
 
-      db.ref('reus').update(batch)
-        .then(() => {
-          alert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s)${fullSync?`, ${toDelete.length} borrada(s)`:''}.`);
-        })
-        .catch(err => {
-          console.error('[importReunionesExcel] Error al guardar:', err);
-          alert('Hubo un error al guardar en Firebase: ' + err.message);
-        });
+      try {
+        await db.ref('reus').update(batch);
+        await reuAlert(`Listo: ${toUpdate.length} actualizada(s), ${toCreate.length} nueva(s)${fullSync?`, ${toDelete.length} borrada(s)`:''}.`);
+      } catch (err) {
+        console.error('[importReunionesExcel] Error al guardar:', err);
+        await reuAlert('Hubo un error al guardar en Firebase: ' + err.message);
+      }
     } catch (err) {
       console.error('[importReunionesExcel] Error:', err);
-      alert('Hubo un error al leer el Excel: ' + err.message);
+      await reuAlert('Hubo un error al leer el Excel: ' + err.message);
     } finally {
       document.getElementById('reu-excel-input').value = '';
     }
   };
-  document.title = 'DEBUG-0d-antes-readAsArrayBuffer';
   reader.readAsArrayBuffer(file);
 }
 
