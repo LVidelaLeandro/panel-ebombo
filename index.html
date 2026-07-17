@@ -3254,7 +3254,7 @@ const REU_XLS_COLUMNS = [
   {key:'monto',      label:'Monto USD'},
 ];
 const REU_XLS_VALID = {
-  sdr:        ['Leandro','Grace','Carmen','Luziana'],
+  sdr:        ['Leandro','Grace','Carmen','Luziana','Lu','Angela'],
   pais:       ['PERU','MEXICO','ESPANA'],
   realizada:  ['SI','NO','TODAVIA'],
   cotizacion: ['SI','NO','TODAVIA'],
@@ -3326,7 +3326,7 @@ function importReunionesExcel(file) {
         return;
       }
 
-      const norm = v => String(v||'').trim().toUpperCase();
+      const norm = v => stripAccents(String(v||'').trim().toUpperCase());
       const toUpdate = [], toCreate = [], skipped = [], invalid = [];
       const idSeen = {};
       const dupIds = [];
@@ -3345,7 +3345,7 @@ function importReunionesExcel(file) {
         const realizadaN  = norm(obj.realizada);
         const cotizacionN = norm(obj.cotizacion);
         const estadoN     = norm(obj.estado);
-        const paisN       = stripAccents(norm(obj.pais));
+        const paisN       = norm(obj.pais);
         const sdrRaw      = String(obj.sdr||'').trim();
         const sdrMatch    = REU_XLS_VALID.sdr.find(s => s.toLowerCase() === sdrRaw.toLowerCase());
         const rowIssues = [];
@@ -3381,7 +3381,7 @@ function importReunionesExcel(file) {
       });
 
       if (invalid.length) {
-        alert(`Atención: ${invalid.length} fila(s) tienen valores no reconocidos en Realizada/Cotización/Estado (se guardan vacíos) o en País/SDR (se guardan tal cual están escritos, sin normalizar):\n\n${invalid.slice(0,15).join('\n')}${invalid.length>15?`\n...y ${invalid.length-15} más`:''}\n\nRevisá esas celdas en el Excel (Realizada/Cotización deben decir SI, NO o TODAVIA; SDR debe ser Leandro, Grace, Carmen o Luziana; País debe ser Perú, México o España) y volvé a subirlo si hace falta.`);
+        alert(`Atención: ${invalid.length} fila(s) tienen valores no reconocidos en Realizada/Cotización/Estado (se guardan vacíos) o en País/SDR (se guardan tal cual están escritos, sin normalizar):\n\n${invalid.slice(0,15).join('\n')}${invalid.length>15?`\n...y ${invalid.length-15} más`:''}\n\nRevisá esas celdas en el Excel (Realizada/Cotización deben decir SI, NO o TODAVIA, con o sin tilde; SDR debe ser Leandro, Grace, Carmen, Luziana, Lu o Angela; País debe ser Perú, México o España, con o sin tilde) y volvé a subirlo si hace falta.`);
       }
 
       if (dupIds.length) {
